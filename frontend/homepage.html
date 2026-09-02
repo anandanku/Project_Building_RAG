@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sensei — Learn & Build Your Repository</title>
+
+  <!-- Sensei currently uses plain HTML/CSS/JS in frontend/private.
+       Monaco is loaded from CDN so no Vite/React setup is required. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080b11;
+      --panel: #0d1119;
+      --panel-2: #111722;
+      --panel-3: #151c28;
+      --border: #263041;
+      --border-soft: #1b2431;
+      --text: #e6edf3;
+      --muted: #8b98a8;
+      --muted-2: #657286;
+      --purple: #8b5cf6;
+      --purple-2: #a78bfa;
+      --purple-bg: rgba(139,92,246,.12);
+      --green: #3fb950;
+      --red: #f85149;
+      --yellow: #d29922;
+      --blue: #58a6ff;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button, input, textarea, select { font: inherit; }
+    button { color: inherit; }
+
+    .app {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      min-width: 850px;
+    }
+
+    /* ================= TOP BAR ================= */
+
+    .topbar {
+      height: 58px;
+      flex: 0 0 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px 0 18px;
+      border-bottom: 1px solid var(--border);
+      background: #090d14;
+      z-index: 20;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 250px;
+    }
+
+    .brand-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      box-shadow: 0 0 20px rgba(124,58,237,.28);
+      font-family: "Fira Code", monospace;
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    .brand-name {
+      font-weight: 700;
+      letter-spacing: -.2px;
+    }
+
+    .brand-sub {
+      color: var(--muted);
+      font-size: 11px;
+      margin-left: 3px;
+    }
+
+    .workspace-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px rgba(63,185,80,.5);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+    }
+
+    .top-btn {
+      height: 34px;
+      padding: 0 10px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: #0d121a;
+      color: var(--muted);
+      cursor: pointer;
+      transition: .18s ease;
+    }
+
+    .top-btn:hover {
+      border-color: #3a4658;
+      color: var(--text);
+      background: #121924;
+    }
+
+    .avatar-btn {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border-radius: 50%;
+      border: 2px solid #354052;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      overflow: hidden;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .avatar-btn img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .profile-menu {
+      position: absolute;
+      right: 0;
+      top: 45px;
+      width: 245px;
+      background: #111722;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 20px 50px rgba(0,0,0,.55);
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(-5px);
+      pointer-events: none;
+      transition: .18s ease;
+    }
+
+    .profile-menu.open {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .profile-header {
+      padding: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .profile-header strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 3px;
+    }
+
+    .profile-header span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .profile-item {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      padding: 12px 14px;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .profile-item:hover {
+      background: var(--purple-bg);
+      color: var(--text);
+    }
+
+    .profile-item.danger:hover {
+      background: rgba(248,81,73,.1);
+      color: var(--red);
+    }
+
+    /* ================= WORKSPACE ================= */
+
+    .workspace {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(210px, 275px) minmax(360px, 1fr) minmax(280px, 360px);
+      overflow: hidden;
+    }
+
+    .workspace.repo-collapsed {
+      grid-template-columns: 0 minmax(360px, 1fr) minmax(280px, 360px);
+    }
+
+    .workspace.chat-collapsed {
+      grid-template-columns: minmax(210px, 275px) minmax(360px, 1fr) 0;
+    }
+
+    .workspace.both-collapsed {
+      grid-template-columns: 0 minmax(360px, 1fr) 0;
+    }
+
+    .panel {
+      min-width: 0;
+      min-height: 0;
+      background: var(--panel);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .repo-panel {
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .editor-panel {
+      display: flex;
+      flex-direction: column;
+      background: #0b0f16;
+    }
+
+    .chat-panel {
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Resizers */
+
+    .resizer {
+      width: 5px;
+      cursor: col-resize;
+      background: rgba(255,255,255,.015);
+      position: relative;
+      z-index: 10;
+      margin-left: -2px;
+      margin-right: -2px;
+    }
+
+    .resizer:hover,
+    .resizer.dragging {
+      background: rgba(139,92,246,.65);
+      box-shadow: 0 0 12px rgba(139,92,246,.28);
+    }
+
+    .resizer::after {
+      content: "⋮";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      color: #536174;
+      font-size: 14px;
+      pointer-events: none;
+      opacity: .55;
+    }
+
+    .resizer:hover::after,
+    .resizer.dragging::after {
+      color: #c4b5fd;
+      opacity: 1;
+    }
+
+    .repo-panel .panel-header,
+    .chat-panel .panel-header,
+    .editor-toolbar {
+      height: 48px;
+      flex: 0 0 48px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      background: #0d121a;
+    }
+
+    .panel-title {
+      font-family: "Fira Code", ui-monospace, monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: #dbe5ef;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-title small {
+      color: var(--muted-2);
+      font-family: inherit;
+      font-weight: 400;
+    }
+
+    .editor-drag-hint {
+      color: #566276;
+      font-size: 9px;
+      margin-left: 12px;
+      letter-spacing: .2px;
+    }
+
+    .panel-spacer { flex: 1; }
+
+    .icon-btn {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .icon-btn:hover {
+      background: var(--panel-3);
+      color: var(--text);
+    }
+
+    /* ================= REPOSITORIES ================= */
+
+    .repo-controls {
+      padding: 10px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .repo-select {
+      width: 100%;
+      height: 36px;
+      padding: 0 10px;
+      background: #111722;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      outline: none;
+    }
+
+    .repo-select:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 2px rgba(139,92,246,.12);
+    }
+
+    .repo-meta {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 2px 0;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .tree {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 7px 5px 20px;
+    }
+
+    .tree::-webkit-scrollbar,
+    .chat-messages::-webkit-scrollbar {
+      width: 7px;
+    }
+
+    .tree::-webkit-scrollbar-thumb,
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: #283243;
+      border-radius: 10px;
+    }
+
+    .tree-row {
+      height: 29px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding-right: 7px;
+      border-radius: 5px;
+      cursor: pointer;
+      color: #aeb9c8;
+      font-size: 12px;
+      user-select: none;
+    }
+
+    .tree-row:hover {
+      background: #141b27;
+      color: #eef3f8;
+    }
+
+    .tree-row.active {
+      background: rgba(139,92,246,.13);
+      color: #dcd2ff;
+    }
+
+    .tree-row .arrow {
+      width: 12px;
+      text-align: center;
+      color: var(--muted-2);
+      font-size: 10px;
+      flex: 0 0 12px;
+    }
+
+    .tree-row .file-icon {
+      width: 15px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--blue);
+    }
+
+    .tree-row.folder .file-icon { color: #eab308; }
+
+    .tree-children { display: none; }
+    .tree-children.open { display: block; }
+
+    .empty-state {
+      color: var(--muted-2);
+      font-size: 11px;
+      text-align: center;
+      padding: 30px 15px;
+      line-height: 1.7;
+    }
+
+    /* ================= EDITOR ================= */
+
+    .editor-toolbar {
+      gap: 9px;
+    }
+
+    .language-select {
+      height: 30px;
+      min-width: 105px;
+      background: #111722;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0 7px;
+      outline: none;
+      font-size: 11px;
+    }
+
+    .editor-tabs {
+      height: 36px;
+      flex: 0 0 36px;
+      display: flex;
+      align-items: stretch;
+      border-bottom: 1px solid var(--border);
+      background: #090d13;
+      overflow-x: auto;
+    }
+
+    .editor-tab {
+      min-width: 125px;
+      max-width: 220px;
+      padding: 0 11px;
+      border-right: 1px solid var(--border-soft);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-family: "Fira Code", monospace;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .editor-tab.active {
+      color: var(--text);
+      background: #0f141d;
+      border-top: 1px solid var(--purple);
+    }
+
+    .editor-tab .tab-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    #editor {
+      flex: 1;
+      min-height: 0;
+    }
+
+    .editor-footer {
+      height: 26px;
+      flex: 0 0 26px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      color: var(--muted-2);
+      font-family: "Fira Code", monospace;
+      font-size: 10px;
+      background: #0b0f15;
+    }
+
+    /* ================= CHAT ================= */
+
+    .chat-context {
+      padding: 9px 11px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--muted);
+      font-size: 10px;
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+
+    .context-file {
+      color: var(--purple-2);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .chat-messages {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 14px 12px 18px;
+    }
+
+    .message {
+      display: flex;
+      gap: 9px;
+      margin-bottom: 15px;
+      line-height: 1.55;
+      font-size: 12px;
+    }
+
+    .message.user { flex-direction: row-reverse; }
+
+    .message-avatar {
+      width: 25px;
+      height: 25px;
+      flex: 0 0 25px;
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      font-size: 9px;
+      font-weight: 700;
+      background: #202938;
+      color: var(--muted);
+    }
+
+    .message.assistant .message-avatar {
+      background: rgba(139,92,246,.18);
+      color: var(--purple-2);
+    }
+
+    .message-bubble {
+      max-width: 86%;
+      padding: 9px 11px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      color: #bfc9d6;
+      background: #101621;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .message.user .message-bubble {
+      background: #171326;
+      border-color: rgba(139,92,246,.25);
+      color: #ded8ef;
+    }
+
+    .chat-input-wrap {
+      border-top: 1px solid var(--border);
+      padding: 10px;
+      background: #0c1119;
+    }
+
+    .chat-input-box {
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: #101620;
+      overflow: hidden;
+    }
+
+    .chat-input {
+      display: block;
+      width: 100%;
+      height: 74px;
+      resize: none;
+      border: 0;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      padding: 10px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .chat-input::placeholder { color: #536174; }
+
+    .chat-input-actions {
+      display: flex;
+      justify-content: flex-end;
+      padding: 5px;
+      border-top: 1px solid var(--border-soft);
+    }
+
+    .send-btn {
+      height: 28px;
+      padding: 0 11px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--purple);
+      color: white;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .send-btn:hover { background: #7c3aed; }
+    .send-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    .typing {
+      color: var(--muted);
+      font-size: 10px;
+      padding: 4px 0 8px 34px;
+      display: none;
+    }
+
+    .typing.show { display: block; }
+
+    /* ================= COLLAPSED PANELS ================= */
+
+    .repo-collapsed .repo-panel,
+    .chat-collapsed .chat-panel,
+    .both-collapsed .repo-panel,
+    .both-collapsed .chat-panel {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    /* ================= TOAST ================= */
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translate(-50%, 15px);
+      background: #151c28;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 13px;
+      font-size: 11px;
+      box-shadow: 0 15px 40px rgba(0,0,0,.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: .2s ease;
+      z-index: 100;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    /* ================= RESPONSIVE ================= */
+
+    @media (max-width: 1050px) {
+      .app { min-width: 850px; }
+      .workspace {
+        grid-template-columns: 220px minmax(360px, 1fr) 300px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<div class="app">
+
+  <!-- ================= TOP BAR ================= -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-logo">&lt;/&gt;</div>
+      <div>
+        <span class="brand-name">Sensei</span>
+        <span class="brand-sub">Learn & Build</span>
+      </div>
+    </div>
+
+    <div class="workspace-title">
+      <span class="status-dot"></span>
+      <span id="workspaceStatus">Workspace ready</span>
+    </div>
+
+    <div class="top-actions">
+      <button class="top-btn" id="saveBtn" title="Save current code">Save</button>
+      <button class="top-btn" id="refreshReposBtn" title="Reload repositories">↻</button>
+
+      <button class="avatar-btn" id="avatarBtn" aria-label="Profile">
+        <span id="avatarInitials">U</span>
+      </button>
+
+      <div class="profile-menu" id="profileMenu">
+        <div class="profile-header">
+          <strong id="profileName">User</strong>
+          <span id="profileEmail">Not connected</span>
+        </div>
+
+        <button class="profile-item" id="connectGithubBtn">
+          <span>◉</span>
+          <span>Connect GitHub</span>
+        </button>
+
+        <button class="profile-item danger" id="logoutBtn">
+          <span>↪</span>
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= WORKSPACE ================= -->
+  <main class="workspace" id="workspace">
+
+    <!-- ================= LEFT: REPOSITORIES ================= -->
+    <section class="panel repo-panel" id="repoPanel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>Your Repositories</span>
+          <small id="repoCount">0</small>
+        </div>
+        <div class="panel-spacer"></div>
+        <button class="icon-btn" id="collapseRepoBtn" title="Collapse repository panel">‹</button>
+      </div>
+
+      <div class="repo-controls">
+        <select class="repo-select" id="repoSelect">
+          <option value="">Select a repository...</option>
+        </select>
+
+        <div class="repo-meta">
+          <span>●</span>
+          <span id="repoMeta">Connect GitHub to load repositories</span>
+        </div>
+      </div>
+
+      <div class="tree" id="repoTree">
+        <div class="empty-state">
+          Select a repository to see its folders and files.
+        </div>
+      </div>
+    </section>
+
+    <!-- Resize handle -->
+    <div class="resizer" id="repoResizer"></div>
+
+    <!-- ================= CENTER: MONACO ================= -->
+    <section class="panel editor-panel">
+      <div class="editor-toolbar">
+        <div class="panel-title">
+          <span>Editor</span>
+          <small id="currentRepoLabel">No repository</small>
+        </div>
+        <div class="editor-drag-hint">Drag either divider to resize</div>
+
+        <div class="panel-spacer"></div>
+
+        <select class="language-select" id="languageSelect">
+          <option value="javascript">JavaScript</option>
+          <option value="typescript">TypeScript</option>
+          <option value="python">Python</option>
+          <option value="java">Java</option>
+          <option value="cpp">C++</option>
+          <option value="html">HTML</option>
+          <option value="css">CSS</option>
+          <option value="json">JSON</option>
+          <option value="markdown">Markdown</option>
+          <option value="plaintext">Plain Text</option>
+        </select>
+      </div>
+
+      <div class="editor-tabs" id="editorTabs"></div>
+
+      <div id="editor"></div>
+
+      <div class="editor-footer">
+        <span id="editorPosition">Ln 1, Col 1</span>
+        <span style="flex:1"></span>
+        <span id="editorState">Ready</span>
+      </div>
+    </section>
+
+    <!-- Resize handle -->
+    <div class="resizer" id="chatResizer"></div>
+
+    <!-- ================= RIGHT: RAG CHAT ================= -->
+    <section class="panel chat-panel" id="chatPanel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>Learn &amp; Build</span>
+          <small>Repository intelligence</small>
+        </div>
+        <div class="panel-spacer"></div>
+        <button class="icon-btn" id="clearChatBtn" title="Clear chat">⌫</button>
+        <button class="icon-btn" id="collapseChatBtn" title="Collapse chat panel">›</button>
+      </div>
+
+      <div class="chat-context">
+        <span>Context:</span>
+        <span class="context-file" id="chatContext">No file selected</span>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <div class="message assistant">
+          <div class="message-avatar">AI</div>
+          <div class="message-bubble">Hi! Select a repository and a file. I learn from your repository context so I can explain the code, trace how files connect, and help you build changes.</div>
+        </div>
+      </div>
+
+      <div class="typing" id="typing">Sensei is thinking...</div>
+
+      <div class="chat-input-wrap">
+        <div class="chat-input-box">
+          <textarea
+            id="chatInput"
+            class="chat-input"
+            placeholder="Ask Sensei to learn, explain, or build..."
+          ></textarea>
+
+          <div class="chat-input-actions">
+            <button class="send-btn" id="sendBtn">Send ↵</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  /*
+   * ============================================================
+   * SENSEI FRONTEND API CONFIGURATION
+   * ============================================================
+   *
+   * This frontend is deliberately plain HTML + CSS + JavaScript,
+   * matching the current Sensei frontend structure.
+   *
+   * Change only these endpoint constants if your backend uses
+   * different GitHub/RAG routes.
+   */
+  const API = {
+    me: "/auth/me",
+
+    // REQUIRED BY YOUR REQUEST:
+    connectGithub: "/auth",
+    logout: "/logout",
+
+    // Suggested backend endpoints for the GitHub RAG feature.
+    repositories: "/github/repos",
+
+    // Repository tree:
+    // GET /github/repos/:owner/:repo/tree
+    repositoryTree: (owner, repo) =>
+      "/github/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) + "/tree",
+
+    // File content fallback:
+    // GET /github/repos/:owner/:repo/file?path=...
+    fileContent: (owner, repo, path) =>
+      "/github/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(repo) +
+      "/file?path=" + encodeURIComponent(path),
+
+    // Sensei / RAG chat:
+    // POST /rag/chat
+    ragChat: "/rag/chat"
+  };
+
+  /*
+   * Expected repository response examples supported by this frontend:
+   *
+   * [
+   *   { id, name, full_name, owner: { login }, private, default_branch }
+   * ]
+   *
+   * OR:
+   *
+   * { repositories: [ ... ] }
+   *
+   * Expected tree:
+   *
+   * { tree: [
+   *   { path: "src/index.js", type: "blob", content: "..." },
+   *   { path: "src/utils/helper.js", type: "blob" },
+   *   { path: "src", type: "tree" }
+   * ] }
+   *
+   * The renderer also accepts a recursively nested tree.
+   */
+
+  const state = {
+    user: null,
+    repositories: [],
+    selectedRepository: null,
+    treeData: [],
+    files: new Map(),
+    openTabs: [],
+    activeFile: null,
+    editor: null,
+    monaco: null,
+    profileOpen: false,
+    repoWidth: 275,
+    chatWidth: 360,
+    repoCollapsed: false,
+    chatCollapsed: false
+  };
+
+  const $ = (id) => document.getElementById(id);
+
+  /* ================= BASIC UI ================= */
+
+  function showToast(message) {
+    const toast = $("toast");
+    toast.textContent = message;
+    toast.classList.add("show");
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(() => toast.classList.remove("show"), 2600);
+  }
+
+  function initials(name = "User") {
+    return name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(x => x[0])
+      .join("")
+      .toUpperCase() || "U";
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function setWorkspaceStatus(text) {
+    $("workspaceStatus").textContent = text;
+  }
+
+  /* ================= PROFILE ================= */
+
+  async function loadCurrentUser() {
+    try {
+      const response = await fetch(API.me, {
+        credentials: "include"
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (!data.authenticated || !data.user) return;
+
+      state.user = data.user;
+
+      $("profileName").textContent = data.user.name || "User";
+      $("profileEmail").textContent = data.user.email || "GitHub account";
+      $("avatarInitials").textContent = initials(data.user.name);
+
+      if (data.user.photoURL) {
+        const img = document.createElement("img");
+        img.src = data.user.photoURL;
+        img.alt = "";
+        img.onerror = () => img.remove();
+        $("avatarBtn").replaceChildren(img);
+      }
+    } catch (error) {
+      console.warn("Could not load /auth/me:", error);
+    }
+  }
+
+  $("avatarBtn").addEventListener("click", (event) => {
+    event.stopPropagation();
+    state.profileOpen = !state.profileOpen;
+    $("profileMenu").classList.toggle("open", state.profileOpen);
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".top-actions")) {
+      state.profileOpen = false;
+      $("profileMenu").classList.remove("open");
+    }
+  });
+
+  /*
+   * IMPORTANT:
+   * Your requested behavior is POST /auth.
+   *
+   * For a GitHub OAuth flow, your backend should implement:
+   * POST /auth
+   *
+   * and return either:
+   *   { redirectUrl: "https://github.com/..." }
+   *
+   * or a normal HTTP response that tells the frontend where
+   * the OAuth flow should continue.
+   */
+  $("connectGithubBtn").addEventListener("click", async () => {
+    try {
+      $("connectGithubBtn").disabled = true;
+      setWorkspaceStatus("Connecting GitHub...");
+
+      const response = await fetch(API.connectGithub, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          source: "sensei"
+        })
+      });
+
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (_) {}
+
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+        return;
+      }
+
+      if (response.redirected) {
+        window.location.href = response.url;
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("POST /auth returned " + response.status);
+      }
+
+      showToast("GitHub connected");
+      await loadCurrentUser();
+      await loadRepositories();
+    } catch (error) {
+      console.error(error);
+      showToast("GitHub connection failed. Check POST /auth.");
+      setWorkspaceStatus("GitHub connection failed");
+    } finally {
+      $("connectGithubBtn").disabled = false;
+    }
+  });
+
+  $("logoutBtn").addEventListener("click", async () => {
+    try {
+      const response = await fetch(API.logout, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("Logout failed");
+      }
+
+      state.user = null;
+      showToast("Logged out");
+      window.location.href = "/";
+    } catch (error) {
+      console.error(error);
+      showToast("Logout failed");
+    }
+  });
+
+  /* ================= REPOSITORIES ================= */
+
+  async function loadRepositories() {
+    try {
+      setWorkspaceStatus("Loading repositories...");
+
+      const response = await fetch(API.repositories, {
+        credentials: "include"
+      });
+
+      if (response.status === 401) {
+        $("repoMeta").textContent = "Connect GitHub to load repositories";
+        $("repoCount").textContent = "0";
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Repository request failed: " + response.status);
+      }
+
+      const data = await response.json();
+
+      state.repositories =
+        Array.isArray(data)
+          ? data
+          : (data.repositories || data.repos || data.items || []);
+
+      renderRepositorySelect();
+
+      $("repoCount").textContent = state.repositories.length;
+      $("repoMeta").textContent =
+        state.repositories.length
+          ? state.repositories.length + " repositories available"
+          : "No repositories returned";
+
+      setWorkspaceStatus("Repositories loaded");
+    } catch (error) {
+      console.error(error);
+      $("repoMeta").textContent = "Could not load repositories";
+      setWorkspaceStatus("Repository loading failed");
+      showToast("Could not load repositories");
+    }
+  }
+
+  function normalizeRepository(repo) {
+    const owner =
+      repo.owner?.login ||
+      repo.owner?.name ||
+      repo.owner ||
+      repo.full_name?.split("/")[0] ||
+      "";
+
+    const name =
+      repo.name ||
+      repo.repository_name ||
+      repo.full_name?.split("/")[1] ||
+      "";
+
+    return {
+      ...repo,
+      owner,
+      name,
+      full_name: repo.full_name || (owner && name ? owner + "/" + name : name)
+    };
+  }
+
+  function renderRepositorySelect() {
+    const select = $("repoSelect");
+    select.innerHTML = '<option value="">Select a repository...</option>';
+
+    state.repositories.forEach((rawRepo, index) => {
+      const repo = normalizeRepository(rawRepo);
+      state.repositories[index] = repo;
+
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent =
+        repo.full_name ||
+        repo.name ||
+        ("Repository " + (index + 1));
+
+      select.appendChild(option);
+    });
+  }
+
+  $("repoSelect").addEventListener("change", async (event) => {
+    const index = event.target.value;
+
+    if (index === "") {
+      state.selectedRepository = null;
+      state.treeData = [];
+      renderTree([]);
+      $("currentRepoLabel").textContent = "No repository";
+      return;
+    }
+
+    const repo = state.repositories[Number(index)];
+    await selectRepository(repo);
+  });
+
+  async function selectRepository(repo) {
+    state.selectedRepository = repo;
+    state.files.clear();
+    state.openTabs = [];
+    state.activeFile = null;
+
+    $("currentRepoLabel").textContent = repo.full_name || repo.name;
+    $("repoMeta").textContent = "Loading repository structure...";
+    setWorkspaceStatus("Reading " + (repo.name || "repository") + "...");
+
+    try {
+      const response = await fetch(
+        API.repositoryTree(repo.owner, repo.name),
+        { credentials: "include" }
+      );
+
+      if (!response.ok) {
+        throw new Error("Tree request failed: " + response.status);
+      }
+
+      const data = await response.json();
+
+      state.treeData =
+        data.tree ||
+        data.files ||
+        data.structure ||
+        data.contents ||
+        data;
+
+      renderTree(state.treeData);
+
+      $("repoMeta").textContent = "Repository structure loaded";
+      setWorkspaceStatus("Repository ready");
+    } catch (error) {
+      console.error(error);
+      $("repoMeta").textContent = "Could not load repository structure";
+      renderTree([]);
+      showToast("Could not load repository structure");
+      setWorkspaceStatus("Repository loading failed");
+    }
+  }
+
+  /*
+   * Convert a flat GitHub-like path list into a nested structure.
+   * This lets the frontend support:
+   *
+   * src/index.js
+   * src/utils/helper.js
+   * package.json
+   *
+   * without requiring the backend to build a tree.
+   */
+  function buildNestedTree(items) {
+    if (!Array.isArray(items)) return [];
+
+    // Already nested structure.
+    if (items.some(x => x && Array.isArray(x.children))) {
+      return items;
+    }
+
+    const root = [];
+
+    function getOrCreateFolder(children, name, path) {
+      let folder = children.find(x => x.type === "tree" && x.name === name);
+
+      if (!folder) {
+        folder = {
+          type: "tree",
+          name,
+          path,
+          children: []
+        };
+        children.push(folder);
+      }
+
+      return folder;
+    }
+
+    for (const item of items) {
+      if (!item) continue;
+
+      const path = item.path || item.name || "";
+      if (!path) continue;
+
+      // Some APIs already return a GitHub "tree" item.
+      if (!path.includes("/")) {
+        root.push({
+          ...item,
+          name: item.name || path,
+          type: item.type || (item.children ? "tree" : "blob")
+        });
+        continue;
+      }
+
+      const parts = path.split("/").filter(Boolean);
+      let current = root;
+      let currentPath = "";
+
+      parts.forEach((part, i) => {
+        currentPath += (currentPath ? "/" : "") + part;
+
+        const isFile = i === parts.length - 1;
+
+        if (isFile) {
+          current.push({
+            ...item,
+            name: part,
+            path,
+            type: item.type || "blob"
+          });
+        } else {
+          const folder = getOrCreateFolder(current, part, currentPath);
+          current = folder.children;
+        }
+      });
+    }
+
+    function sortTree(nodes) {
+      nodes.sort((a, b) => {
+        const af = a.type === "tree" || Array.isArray(a.children);
+        const bf = b.type === "tree" || Array.isArray(b.children);
+
+        if (af !== bf) return af ? -1 : 1;
+        return (a.name || "").localeCompare(b.name || "");
+      });
+
+      nodes.forEach(n => {
+        if (Array.isArray(n.children)) sortTree(n.children);
+      });
+    }
+
+    sortTree(root);
+    return root;
+  }
+
+  function renderTree(items) {
+    const container = $("repoTree");
+    container.innerHTML = "";
+
+    if (!items || !items.length) {
+      container.innerHTML =
+        '<div class="empty-state">No files were returned by the backend.</div>';
+      return;
+    }
+
+    const nested = buildNestedTree(items);
+
+    const fragment = document.createDocumentFragment();
+
+    nested.forEach(node => {
+      fragment.appendChild(renderTreeNode(node, 0));
+    });
+
+    container.appendChild(fragment);
+  }
+
+  function renderTreeNode(node, depth) {
+    const wrapper = document.createElement("div");
+
+    const row = document.createElement("div");
+    row.className =
+      "tree-row " +
+      ((node.type === "tree" || node.children) ? "folder" : "file");
+
+    row.style.paddingLeft = (8 + depth * 15) + "px";
+
+    const hasChildren =
+      node.type === "tree" ||
+      Array.isArray(node.children);
+
+    row.innerHTML = `
+      <span class="arrow">${hasChildren ? "▶" : ""}</span>
+      <span class="file-icon">${hasChildren ? "●" : "◇"}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        ${escapeHtml(node.name || node.path || "unknown")}
+      </span>
+    `;
+
+    if (hasChildren) {
+      const children = document.createElement("div");
+      children.className = "tree-children";
+
+      const childNodes = node.children || [];
+
+      childNodes.forEach(child => {
+        children.appendChild(renderTreeNode(child, depth + 1));
+      });
+
+      row.addEventListener("click", () => {
+        const open = children.classList.toggle("open");
+        row.querySelector(".arrow").textContent = open ? "▼" : "▶";
+      });
+
+      wrapper.appendChild(row);
+      wrapper.appendChild(children);
+    } else {
+      row.addEventListener("click", () => openFile(node));
+      wrapper.appendChild(row);
+    }
+
+    return wrapper;
+  }
+
+  /* ================= FILES / MONACO ================= */
+
+  function detectLanguage(path = "") {
+    const extension = path.split(".").pop().toLowerCase();
+
+    const map = {
+      js: "javascript",
+      jsx: "javascript",
+      ts: "typescript",
+      tsx: "typescript",
+      py: "python",
+      java: "java",
+      cpp: "cpp",
+      cc: "cpp",
+      cxx: "cpp",
+      c: "c",
+      h: "cpp",
+      hpp: "cpp",
+      html: "html",
+      htm: "html",
+      css: "css",
+      scss: "css",
+      json: "json",
+      md: "markdown",
+      txt: "plaintext"
+    };
+
+    return map[extension] || "plaintext";
+  }
+
+  function guessContent(file) {
+    return (
+      file.content ??
+      file.text ??
+      file.code ??
+      ""
+    );
+  }
+
+  async function openFile(file) {
+    const path = file.path || file.name;
+
+    if (!path) return;
+
+    const key = state.selectedRepository
+      ? state.selectedRepository.full_name + ":" + path
+      : path;
+
+    let content = guessContent(file);
+
+    // If the tree already supplied content, don't make another request.
+    if (content === "") {
+      try {
+        if (state.selectedRepository) {
+          const response = await fetch(
+            API.fileContent(
+              state.selectedRepository.owner,
+              state.selectedRepository.name,
+              path
+            ),
+            { credentials: "include" }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+
+            content =
+              data.content ??
+              data.text ??
+              data.code ??
+              "";
+
+            // GitHub-style APIs sometimes return base64 content.
+            if (
+              data.encoding === "base64" &&
+              typeof content === "string"
+            ) {
+              try {
+                content = decodeURIComponent(
+                  Array.prototype.map.call(
+                    atob(content),
+                    c => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)
+                  ).join("")
+                );
+              } catch (_) {
+                // Keep original content if decoding fails.
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.warn("Could not fetch file content:", error);
+      }
+    }
+
+    state.files.set(key, {
+      ...file,
+      path,
+      content
+    });
+
+    if (!state.openTabs.some(tab => tab.key === key)) {
+      state.openTabs.push({
+        key,
+        path
+      });
+    }
+
+    state.activeFile = {
+      ...file,
+      path,
+      key,
+      content
+    };
+
+    renderTabs();
+    loadFileIntoEditor(content, detectLanguage(path));
+
+    $("chatContext").textContent = path;
+    $("editorState").textContent = "Loaded";
+
+    setWorkspaceStatus("Editing " + path);
+  }
+
+  function renderTabs() {
+    const tabs = $("editorTabs");
+    tabs.innerHTML = "";
+
+    state.openTabs.forEach(tab => {
+      const el = document.createElement("div");
+      el.className =
+        "editor-tab " +
+        (state.activeFile?.key === tab.key ? "active" : "");
+
+      el.innerHTML = `
+        <span class="tab-name">${escapeHtml(tab.path.split("/").pop())}</span>
+        <span style="color:#536174">×</span>
+      `;
+
+      el.addEventListener("click", () => {
+        const file = state.files.get(tab.key);
+
+        if (file) {
+          state.activeFile = file;
+          loadFileIntoEditor(file.content || "", detectLanguage(file.path));
+          renderTabs();
+          $("chatContext").textContent = file.path;
+        }
+      });
+
+      tabs.appendChild(el);
+    });
+  }
+
+  function loadFileIntoEditor(content, language) {
+    if (!state.editor || !state.monaco) return;
+
+    state.editor.setValue(content || "");
+
+    state.monaco.editor.setModelLanguage(
+      state.editor.getModel(),
+      language
+    );
+
+    $("languageSelect").value =
+      [...$("languageSelect").options].some(o => o.value === language)
+        ? language
+        : "plaintext";
+
+    state.editor.setPosition({ lineNumber: 1, column: 1 });
+    state.editor.focus();
+  }
+
+  function initMonaco() {
+    require.config({
+      paths: {
+        vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs"
+      }
+    });
+
+    require(["vs/editor/editor.main"], function(monaco) {
+      state.monaco = monaco;
+
+      state.editor = monaco.editor.create($("editor"), {
+        value:
+`// Welcome to Sensei.
+//
+// Select a GitHub repository from the left.
+// Then select a file to load it here.
+//
+// Your RAG assistant is available on the right.
+
+function helloSensei() {
+  return "Ready to code.";
+}
+`,
+        language: "javascript",
+        theme: "vs-dark",
+        automaticLayout: true,
+        minimap: { enabled: true },
+        fontSize: 13,
+        fontFamily: "Fira Code, Consolas, monospace",
+        lineNumbers: "on",
+        roundedSelection: false,
+        scrollBeyondLastLine: false,
+        padding: { top: 12 },
+        suggest: { showMethods: true }
+      });
+
+      state.editor.onDidChangeCursorPosition(event => {
+        $("editorPosition").textContent =
+          "Ln " + event.position.lineNumber +
+          ", Col " + event.position.column;
+      });
+
+      state.editor.onDidChangeModelContent(() => {
+        $("editorState").textContent = "Modified";
+
+        if (state.activeFile) {
+          state.activeFile.content = state.editor.getValue();
+
+          const stored = state.files.get(state.activeFile.key);
+          if (stored) {
+            stored.content = state.activeFile.content;
+          }
+        }
+      });
+
+      window.addEventListener("resize", () => state.editor.layout());
+    });
+  }
+
+  $("languageSelect").addEventListener("change", () => {
+    if (!state.editor || !state.monaco) return;
+
+    state.monaco.editor.setModelLanguage(
+      state.editor.getModel(),
+      $("languageSelect").value
+    );
+  });
+
+  $("saveBtn").addEventListener("click", () => {
+    if (!state.activeFile || !state.editor) {
+      showToast("Select a file first");
+      return;
+    }
+
+    /*
+     * This only updates the editor/frontend state.
+     *
+     * Later you can connect it to:
+     * POST /github/repos/:owner/:repo/file
+     *
+     * for actual GitHub commits.
+     */
+    state.activeFile.content = state.editor.getValue();
+
+    const stored = state.files.get(state.activeFile.key);
+    if (stored) stored.content = state.activeFile.content;
+
+    $("editorState").textContent = "Saved locally";
+    showToast("Code saved in workspace");
+  });
+
+  /* ================= RAG CHAT ================= */
+
+  function addChatMessage(role, text) {
+    const messages = $("chatMessages");
+
+    const message = document.createElement("div");
+    message.className = "message " + role;
+
+    message.innerHTML = `
+      <div class="message-avatar">${role === "assistant" ? "AI" : "YOU"}</div>
+      <div class="message-bubble">${escapeHtml(text)}</div>
+    `;
+
+    messages.appendChild(message);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  async function sendChatMessage() {
+    const input = $("chatInput");
+    const text = input.value.trim();
+
+    if (!text) return;
+
+    addChatMessage("user", text);
+    input.value = "";
+    $("sendBtn").disabled = true;
+    $("typing").classList.add("show");
+
+    const repo = state.selectedRepository;
+    const code = state.editor ? state.editor.getValue() : "";
+
+    try {
+      const response = await fetch(API.ragChat, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: text,
+
+          repository: repo
+            ? {
+                owner: repo.owner,
+                name: repo.name,
+                full_name: repo.full_name
+              }
+            : null,
+
+          file: state.activeFile
+            ? {
+                path: state.activeFile.path,
+                language: detectLanguage(state.activeFile.path)
+              }
+            : null,
+
+          code
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("RAG endpoint returned " + response.status);
+      }
+
+      const data = await response.json();
+
+      const answer =
+        data.answer ??
+        data.response ??
+        data.message ??
+        data.text ??
+        "Sensei returned no answer.";
+
+      addChatMessage("assistant", answer);
+    } catch (error) {
+      console.error(error);
+
+      addChatMessage(
+        "assistant",
+        "I couldn't reach Sensei's backend. Make sure POST /rag/chat is running."
+      );
+    } finally {
+      $("sendBtn").disabled = false;
+      $("typing").classList.remove("show");
+    }
+  }
+
+  $("sendBtn").addEventListener("click", sendChatMessage);
+
+  $("chatInput").addEventListener("keydown", event => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendChatMessage();
+    }
+  });
+
+  $("clearChatBtn").addEventListener("click", () => {
+    $("chatMessages").innerHTML = "";
+    addChatMessage(
+      "assistant",
+      "Chat cleared. Ask me anything about the selected repository."
+    );
+  });
+
+  /* ================= PANEL COLLAPSING ================= */
+
+  function updateCollapsedLayout() {
+    const workspace = $("workspace");
+
+    workspace.classList.toggle("repo-collapsed", state.repoCollapsed);
+    workspace.classList.toggle("chat-collapsed", state.chatCollapsed);
+    workspace.classList.toggle(
+      "both-collapsed",
+      state.repoCollapsed && state.chatCollapsed
+    );
+
+    $("collapseRepoBtn").textContent = state.repoCollapsed ? "›" : "‹";
+    $("collapseChatBtn").textContent = state.chatCollapsed ? "‹" : "›";
+
+    if (state.editor) {
+      setTimeout(() => state.editor.layout(), 30);
+    }
+  }
+
+  $("collapseRepoBtn").addEventListener("click", () => {
+    state.repoCollapsed = !state.repoCollapsed;
+    updateCollapsedLayout();
+  });
+
+  $("collapseChatBtn").addEventListener("click", () => {
+    state.chatCollapsed = !state.chatCollapsed;
+    updateCollapsedLayout();
+  });
+
+  /* ================= DRAGGABLE / SLIDABLE PANELS ================= */
+
+  function setupResizer(resizerId, side) {
+    const resizer = $(resizerId);
+
+    let dragging = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    resizer.addEventListener("pointerdown", event => {
+      dragging = true;
+      startX = event.clientX;
+
+      const panel = side === "repo"
+        ? $("repoPanel")
+        : $("chatPanel");
+
+      startWidth = panel.getBoundingClientRect().width;
+
+      resizer.classList.add("dragging");
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      resizer.setPointerCapture(event.pointerId);
+    });
+
+    resizer.addEventListener("pointermove", event => {
+      if (!dragging) return;
+
+      const delta = event.clientX - startX;
+
+      if (side === "repo") {
+        const newWidth = Math.max(190, Math.min(500, startWidth + delta));
+        state.repoWidth = newWidth;
+
+        if (!state.repoCollapsed && !state.chatCollapsed) {
+          $("workspace").style.gridTemplateColumns =
+            newWidth + "px minmax(360px, 1fr) " +
+            state.chatWidth + "px";
+        }
+      } else {
+        const newWidth = Math.max(280, Math.min(600, startWidth - delta));
+        state.chatWidth = newWidth;
+
+        if (!state.repoCollapsed && !state.chatCollapsed) {
+          $("workspace").style.gridTemplateColumns =
+            state.repoWidth + "px minmax(360px, 1fr) " +
+            newWidth + "px";
+        }
+      }
+
+      if (state.editor) state.editor.layout();
+    });
+
+    const stop = () => {
+      dragging = false;
+      resizer.classList.remove("dragging");
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    resizer.addEventListener("pointerup", stop);
+    resizer.addEventListener("pointercancel", stop);
+  }
+
+  setupResizer("repoResizer", "repo");
+  setupResizer("chatResizer", "chat");
+
+  /* ================= STARTUP ================= */
+
+  async function init() {
+    initMonaco();
+    await loadCurrentUser();
+    await loadRepositories();
+  }
+
+  $("refreshReposBtn").addEventListener("click", loadRepositories);
+
+  init();
+</script>
+</body>
+</html>
