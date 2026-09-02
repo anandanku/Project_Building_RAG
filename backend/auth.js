@@ -18,26 +18,7 @@ const DEFAULT_CALLBACK_URL = "http://localhost:10000/auth/github/callback";
 
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
-const GITHUB_CALLBACK_URL =
-  process.env.GITHUB_CALLBACK_URL || DEFAULT_CALLBACK_URL;
-
-if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
-  console.warn(
-    "GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env."
-  );
-}
-
-/* ============================================================
-   PASSPORT SESSION
-   ============================================================
-
-   The GitHub access token stays server-side inside the Passport
-   session. It is NEVER returned by /auth/me to the browser.
-
-   The token is kept because Sensei will use the authenticated
-   user's GitHub permissions later when reading repositories and
-   repository files.
-*/
+const GITHUB_CALLBACK_URL =process.env.GITHUB_CALLBACK_URL || DEFAULT_CALLBACK_URL;
 
 passport.serializeUser((user, done) => {
   done(null, user);
@@ -46,10 +27,6 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser((user, done) => {
   done(null, user || null);
 });
-
-/* ============================================================
-   GITHUB OAUTH STRATEGY
-   ============================================================ */
 
 passport.use(
   new GitHubStrategy(
@@ -97,62 +74,24 @@ passport.use(
   )
 );
 
-/* ============================================================
-   ROOT / HOME
-   ============================================================
-
-   GitHub sends the user back to /. The frontend then calls
-   GET /auth/me to obtain the safe user information it needs.
-*/
 
 router.get("/", (req, res) => {
   return res.sendFile(FRONTEND_PATH);
 });
 
-/* ============================================================
-   POST /auth
-   ============================================================
-
-   Sensei's current homepage calls POST /auth when the user clicks
-   "Connect GitHub".
-
-   A normal browser OAuth flow cannot be completed inside fetch(),
-   so this endpoint returns the OAuth URL instead of trying to
-   navigate the fetch request itself.
-
-   If the user is already authenticated, no new OAuth flow starts.
-   The endpoint returns the safe frontend user data and redirects
-   the frontend to /.
-*/
-
 router.post("/", (req, res) => {
   if (req.isAuthenticated && req.isAuthenticated()) {
-    return res.status(200).json({
+    return res.json({
       authenticated: true,
-      redirectUrl: HOME_PATH,
-      user: getPublicUser(req.user),
+      redirectUrl: "/"
     });
   }
 
-  if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
-    return res.status(500).json({
-      authenticated: false,
-      error: "GitHub OAuth is not configured on the server.",
-    });
-  }
-
-  return res.status(200).json({
+  return res.json({
     authenticated: false,
-    redirectUrl: "/auth/github",
+    redirectUrl: "/auth/github"
   });
 });
-
-/* ============================================================
-   GET /auth/github
-   ============================================================
-
-   Starts the actual Passport GitHub OAuth flow.
-*/
 
 router.get("/github", (req, res, next) => {
   if (req.isAuthenticated && req.isAuthenticated()) {
@@ -187,48 +126,7 @@ router.get(
   }
 );
 
-/* ============================================================
-   GET /auth/me
-   ============================================================
 
-   This is the endpoint consumed by Sensei's homepage.
-
-   NEVER return accessToken/refreshToken here.
-*/
-
-router.get("/me", (req, res) => {
-  if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
-    return res.status(401).json({
-      authenticated: false,
-      user: null,
-    });
-  }
-
-  return res.status(200).json({
-    authenticated: true,
-    user: getPublicUser(req.user),
-  });
-});
-
-/* ============================================================
-   GET /auth/github/token-status
-
-   Internal-friendly endpoint for checking whether Sensei has a
-   GitHub token in the current session without exposing it.
-   ============================================================ */
-
-router.get("/github/token-status", (req, res) => {
-  if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
-    return res.status(401).json({ authenticated: false, connected: false });
-  }
-
-  return res.status(200).json({
-    authenticated: true,
-    connected: Boolean(req.user.accessToken),
-    githubId: req.user.githubId || null,
-    login: req.user.login || null,
-  });
-});
 
 /* ============================================================
    POST /logout
