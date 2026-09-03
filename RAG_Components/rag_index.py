@@ -10,7 +10,7 @@ def ingest_file(code, github_id, repo_id, file_path):
         code=code,
         github_id=github_id,
         repo_id=repo_id,
-        file_path=file_path
+        file_name=file_path
     )
 
     store_chunks(
@@ -39,19 +39,21 @@ def ask_question(
 
     relevant_files = []
 
-    for match in results["matches"]:
+    for match in results.get("matches", []):
 
-        metadata = match["metadata"]
+        metadata = match.get("metadata", {})
+
+        content = metadata.get("content", "")
 
         relevant_files.append(
             f"""
 ================ FILE ================
 
-File: {metadata.get("file_path", "Unknown")}
+File: {metadata.get("file_path", metadata.get("file_name", "Unknown"))}
 Language: {metadata.get("language", "Unknown")}
 Chunk: {metadata.get("chunk_index", "Unknown")}
 
-{metadata.get("content", "")}
+{content}
 """
         )
 
