@@ -189,8 +189,7 @@ const SUMMARY_FILE_EXTENSIONS = new Set([
     ".rs",
     ".php",
     ".rb",
-    ".swift",
-    ".dart",
+    ".swift", ".dart",
     ".html", ".htm", ".css", ".scss", ".sass", ".less",
     ".json", ".yaml", ".yml", ".toml",
     ".sh", ".bash",
@@ -322,22 +321,44 @@ function callPython(component, data) {
         let stderr = "";
 
         python.stdout.on("data", (chunk) => {
-            stdout += chunk.toString();
+            const output = chunk.toString();
+            stdout += output;
+            console.log(`[${component}] stdout:`, output.trim());
         });
 
         python.stderr.on("data", (chunk) => {
-            stderr += chunk.toString();
+            const output = chunk.toString();
+            stderr += output;
+            console.error(`[${component}] stderr:`, output.trim());
         });
 
         python.on("error", (error) => {
+            console.error(
+                `[${component}] process error:`,
+                error
+            );
             reject(error);
         });
 
         python.on("close", (exitCode) => {
+            console.log(
+                `[${component}] process exited with code ${exitCode}`
+            );
+
             if (exitCode !== 0) {
+                let pythonError = null;
+
+                try {
+                    pythonError = JSON.parse(stdout)?.error;
+                } catch {
+                    // stdout may contain non-JSON output
+                }
+
                 return reject(
                     new Error(
-                        stderr || `${component} exited with code ${exitCode}`
+                        pythonError ||
+                        stderr.trim() ||
+                        `${component} exited with code ${exitCode}`
                     )
                 );
             }
@@ -346,6 +367,11 @@ function callPython(component, data) {
                 const result = JSON.parse(stdout);
                 resolve(result);
             } catch (error) {
+                console.error(
+                    `[${component}] invalid JSON. Raw stdout:`,
+                    stdout
+                );
+
                 reject(
                     new Error(
                         `Invalid JSON returned by ${component}: ${stdout}`
