@@ -5,7 +5,6 @@ from langchain_text_splitters import (
 
 
 def get_lang(file_name):
-
     extension = file_name.split(".")[-1].lower()
 
     language_map = {
@@ -27,11 +26,19 @@ def get_lang(file_name):
 def chunker(code, github_id, repo_id, file_name):
     language = get_lang(file_name)
 
-    splitter = RecursiveCharacterTextSplitter.from_language(
-        language=language,
-        chunk_size=500,
-        chunk_overlap=50
-    )
+    if language is not None:
+        splitter = RecursiveCharacterTextSplitter.from_language(
+            language=language,
+            chunk_size=500,
+            chunk_overlap=50
+        )
+        language_name = language.value
+    else:
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=500,
+            chunk_overlap=50
+        )
+        language_name = file_name.split(".")[-1].lower()
 
     chunks = splitter.create_documents(
         [code],
@@ -39,11 +46,13 @@ def chunker(code, github_id, repo_id, file_name):
             {
                 "github_id": github_id,
                 "repo_id": repo_id,
-                "language": language.value,
+                "language": language_name,
                 "file_name": file_name
             }
         ]
     )
-    for indx,chunk in enumerate(chunks):
-        chunks.metadatas["chunk_index"]=indx
+
+    for index, chunk in enumerate(chunks):
+        chunk.metadata["chunk_index"] = index
+
     return chunks
