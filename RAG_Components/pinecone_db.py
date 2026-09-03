@@ -12,7 +12,7 @@ if index_name not in pc.list_indexes().names():
         metric="cosine",
         spec=ServerlessSpec(
             cloud="aws",
-            region="ap-south-1"
+            region="us-east-1"
         )
     )
 index=pc.Index(index_name)
