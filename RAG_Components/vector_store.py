@@ -25,8 +25,10 @@ def store_chunks(chunks, github_id, repo_id):
         vectors.append({
             "id": vector_id,
             "values": vector,
-            "metadata": metadata,
-            "content":chunk.page_content
+            "metadata": {
+                **metadata,
+                "content": chunk.page_content
+            }
         })
 
     index.upsert(
