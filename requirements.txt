@@ -1,0 +1,5 @@
+pinecone
+python-dotenv
+langchain-core
+langchain-text-splitters
+langchain-google-genai
