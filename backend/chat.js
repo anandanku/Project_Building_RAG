@@ -189,7 +189,8 @@ const SUMMARY_FILE_EXTENSIONS = new Set([
     ".rs",
     ".php",
     ".rb",
-    ".swift", ".dart",
+    ".swift",
+    ".dart",
     ".html", ".htm", ".css", ".scss", ".sass", ".less",
     ".json", ".yaml", ".yml", ".toml",
     ".sh", ".bash",
@@ -493,17 +494,30 @@ async function askRAG({
         }
     );
 
+    let answer = result?.answer;
+
+    if (Array.isArray(answer)) {
+        answer = answer
+            .filter(
+                (item) =>
+                    item &&
+                    item.type === "text" &&
+                    typeof item.text === "string"
+            )
+            .map((item) => item.text)
+            .join("\n\n");
+    }
+
     if (
-        !result ||
-        typeof result.answer !== "string" ||
-        !result.answer.trim()
+        typeof answer !== "string" ||
+        !answer.trim()
     ) {
         throw new Error(
             "rag_index.py did not return a valid answer"
         );
     }
 
-    return result.answer;
+    return answer;
 }
 
 
