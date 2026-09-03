@@ -7,41 +7,28 @@ import MongoStore from "connect-mongo";
 import path from "path";
 import { fileURLToPath } from "url";
 
-/* ENV */
+import authRouter from "./auth.js";
+import apiRouter from "./api.js";
+import chatRouter from "./chat.js";
+
 dotenv.config();
 
-/* PATH FIX FOR ES MODULES */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/* EXPRESS APP */
 const app = express();
+const PORT = process.env.PORT || 10000;
 
-/* BODY PARSER */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-/* STATIC FRONTEND */
-app.use(express.static(path.join(__dirname)));
-
-/* ============================= */
-/* MONGODB CONNECTION (ATLAS) */
-/* ============================= */
+app.use(express.static(path.join(__dirname, "..", "frontend")));
 
 mongoose
   .connect(process.env.MONGO_URI, {
     dbName: process.env.MONGO_DB_NAME,
   })
-  .then(() => {
-    console.log("MongoDB Connected");
-  })
-  .catch((err) => {
-    console.error("MongoDB Connection Error:", err);
-  });
-
-/* ============================= */
-/* SESSION CONFIGURATION */
-/* ============================= */
+  .then(() => console.log("MongoDB Connected"))
+  .catch((error) => console.error("MongoDB Connection Error:", error));
 
 app.use(
   session({
@@ -57,7 +44,10 @@ app.use(
     cookie: {
       httpOnly: true,
       secure: process.env.COOKIE_SECURE === "true",
-      maxAge: parseInt(process.env.SESSION_MAX_AGE || "86400000"),
+      maxAge: parseInt(
+        process.env.SESSION_MAX_AGE || "86400000",
+        10
+      ),
     },
   })
 );
@@ -65,6 +55,15 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
+/* ============================= */
+/* ROUTERS */
+/* ============================= */
 
-app.use("/",authRouter);
-app.use("/auth",authRouter)
+app.use("/", authRouter);
+app.use("/auth", authRouter);
+app.use("/api", apiRouter);
+app.use("/api/rag", chatRouter);
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
