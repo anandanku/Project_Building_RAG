@@ -1,1357 +1,959 @@
 import express from "express";
-import { createClient } from "redis";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import { spawn } from "child_process";
 
 dotenv.config();
 
 const router = express.Router();
 
-/* ============================================================
-   CONFIGURATION
-   ============================================================ */
+/* =========================================================
+   PATHS
+========================================================= */
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const RAG_COMPONENTS_PATH = path.join(
+    __dirname,
+    "..",
+    "RAG_Components"
+);
 
 const PYTHON_BIN = process.env.PYTHON_BIN || "python";
 
-const RAG_COMPONENTS_PATH =
-  process.env.RAG_COMPONENTS_PATH ||
-  "../RAG_Components";
+/* =========================================================
+   GITHUB CONFIG
+========================================================= */
 
+const GITHUB_API = "https://api.github.com";
 
-/* ============================================================
-   REDIS CONNECTION
-   ============================================================ */
+const GITHUB_HEADERS = {
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+};
 
-const redis = createClient({
-  url: process.env.REDIS_URL,
-});
-
-redis.on("error", (error) => {
-  console.error("Redis Error:", error);
-});
-
-async function connectRedis() {
-  if (!redis.isOpen) {
-    await redis.connect();
-    console.log("Redis Connected");
-  }
-}
-
-connectRedis().catch((error) => {
-  console.error("Redis Connection Error:", error);
-});
-
-
-/* ============================================================
-   REDIS KEYS
-   ============================================================ */
-
-function projectSummaryKey(githubId, repoId) {
-  return `project_summary:${githubId}:${repoId}`;
-}
-
-function chatSummaryKey(githubId, repoId) {
-  return `chat_summary:${githubId}:${repoId}`;
-}
-
-function chatHistoryKey(githubId, repoId) {
-  return `chat_history:${githubId}:${repoId}`;
-}
-
-function indexingLockKey(githubId, repoId) {
-  return `indexing_lock:${githubId}:${repoId}`;
-}
-
-
-/* ============================================================
-   AUTHENTICATION MIDDLEWARE
-   ============================================================ */
+/* =========================================================
+   AUTH MIDDLEWARE
+========================================================= */
 
 function requireAuth(req, res, next) {
 
-  if (!req.isAuthenticated || !req.isAuthenticated()) {
-    return res.status(401).json({
-      error: "Unauthorized",
-      message: "GitHub authentication required.",
-    });
-  }
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+        return res.status(401).json({
+            error: "Authentication required"
+        });
+    }
 
-  if (!req.user?.githubId) {
-    return res.status(401).json({
-      error: "Invalid session",
-      message: "GitHub user information is missing.",
-    });
-  }
+    if (!req.user || !req.user.accessToken) {
+        return res.status(401).json({
+            error: "GitHub authentication token not available"
+        });
+    }
 
-  if (!req.user?.accessToken) {
-    return res.status(401).json({
-      error: "Invalid session",
-      message: "GitHub access token is missing.",
-    });
-  }
-
-  next();
+    next();
 }
 
+/* =========================================================
+   GITHUB REQUEST HELPER
+========================================================= */
 
-/* ============================================================
-   GITHUB API HELPER
-   ============================================================ */
+async function githubRequest(req, endpoint) {
 
-async function githubRequest(accessToken, endpoint) {
+    const response = await fetch(
+        `${GITHUB_API}${endpoint}`,
+        {
+            method: "GET",
 
-  const response = await fetch(
-    `https://api.github.com${endpoint}`,
-    {
-      method: "GET",
-
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${accessToken}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-    }
-  );
-
-  const data = await response.json();
-
-  if (!response.ok) {
-
-    const error = new Error(
-      data?.message ||
-      "GitHub API request failed."
+            headers: {
+                ...GITHUB_HEADERS,
+                Authorization: `Bearer ${req.user.accessToken}`,
+            },
+        }
     );
 
-    error.status = response.status;
+    if (!response.ok) {
 
-    throw error;
-  }
+        let errorBody = {};
 
-  return data;
+        try {
+            errorBody = await response.json();
+        } catch {
+            errorBody = {};
+        }
+
+        const error = new Error(
+            errorBody.message ||
+            `GitHub API request failed with ${response.status}`
+        );
+
+        error.status = response.status;
+
+        throw error;
+    }
+
+    return response.json();
 }
 
+/* =========================================================
+   ERROR HANDLER FOR GITHUB
+========================================================= */
 
-/* ============================================================
+function handleGithubError(error, res) {
+
+    if (error.status === 401) {
+        return res.status(401).json({
+            error: "GitHub authentication expired"
+        });
+    }
+
+    if (error.status === 403) {
+        return res.status(403).json({
+            error: "GitHub API access denied"
+        });
+    }
+
+    if (error.status === 404) {
+        return res.status(404).json({
+            error: "Repository or resource not found"
+        });
+    }
+
+    console.error("GitHub API error:", error);
+
+    return res.status(500).json({
+        error: "GitHub API request failed"
+    });
+}
+
+/* =========================================================
    RESOLVE REPOSITORY
-   ============================================================ */
+========================================================= */
 
 /*
-   Frontend sends only:
+    repoId comes from frontend.
 
-       repoId
+    We use:
 
-   We resolve the repository using the authenticated
-   GitHub access token.
+        GET /repositories/:id
 
-   This prevents users from supplying arbitrary
-   owner/repository combinations.
+    GitHub will only return the repository if the authenticated
+    token has access to it.
+
+    This prevents a user from simply passing another repository
+    ID and accessing it through our backend.
 */
 
 async function resolveRepository(req, repoId) {
 
-  if (!repoId) {
+    if (!/^\d+$/.test(String(repoId))) {
 
-    const error = new Error(
-      "Repository ID is required."
+        const error = new Error(
+            "Invalid repository ID"
+        );
+
+        error.status = 400;
+
+        throw error;
+    }
+
+    const repository = await githubRequest(
+        req,
+        `/repositories/${repoId}`
     );
 
-    error.status = 400;
-
-    throw error;
-  }
-
-  if (!/^\d+$/.test(String(repoId))) {
-
-    const error = new Error(
-      "Invalid repository ID."
-    );
-
-    error.status = 400;
-
-    throw error;
-  }
-
-  return await githubRequest(
-    req.user.accessToken,
-    `/repositories/${repoId}`
-  );
+    return repository;
 }
 
-
-/* ============================================================
-   GET REPOSITORY TREE
-   ============================================================ */
-
-async function getRepositoryTree(
-  req,
-  repository
-) {
-
-  const branch =
-    repository.default_branch || "main";
-
-  return await githubRequest(
-    req.user.accessToken,
-
-    `/repos/${repository.full_name}/git/trees/${encodeURIComponent(
-      branch
-    )}?recursive=1`
-  );
-}
-
-
-/* ============================================================
-   TREE → TEXT
-   ============================================================ */
-
-function treeToText(tree) {
-
-  if (!tree?.tree) {
-    return "";
-  }
-
-  return tree.tree
-    .map((item) => {
-
-      if (item.type === "tree") {
-        return `[DIR]  ${item.path}`;
-      }
-
-      return `[FILE] ${item.path}`;
-
-    })
-    .join("\n");
-}
-
-
-/* ============================================================
-   PYTHON RUNNER
-   ============================================================ */
+/* =========================================================
+   GET REPOSITORIES
+========================================================= */
 
 /*
-   We already have Python RAG components.
+    GET /api/repositories
 
-   Instead of creating another RAG implementation in Node,
-   Node invokes the existing Python functions.
-
-   This allows us to use:
-
-       rag_index.py
-           ↓
-       ingest_file()
-           ↓
-       ask_question()
-
-   directly.
+    Returns repositories accessible to authenticated user.
 */
 
-function runPython(code, payload) {
-
-  return new Promise((resolve, reject) => {
-
-    const python = spawn(
-      PYTHON_BIN,
-      ["-c", code],
-      {
-        cwd: RAG_COMPONENTS_PATH,
-        env: process.env,
-      }
-    );
-
-    let stdout = "";
-    let stderr = "";
-
-    python.stdout.on(
-      "data",
-      (data) => {
-        stdout += data.toString();
-      }
-    );
-
-    python.stderr.on(
-      "data",
-      (data) => {
-        stderr += data.toString();
-      }
-    );
-
-    python.on(
-      "error",
-      (error) => {
-        reject(error);
-      }
-    );
-
-    python.on(
-      "close",
-      (exitCode) => {
-
-        if (exitCode !== 0) {
-
-          return reject(
-            new Error(
-              `Python process failed.\n${stderr}`
-            )
-          );
-        }
+router.get(
+    "/repositories",
+    requireAuth,
+    async (req, res) => {
 
         try {
 
-          const result =
-            JSON.parse(stdout);
+            const repositories = [];
 
-          resolve(result);
+            let page = 1;
+
+            while (true) {
+
+                const repos = await githubRequest(
+                    req,
+                    `/user/repos?per_page=100&page=${page}&sort=updated`
+                );
+
+                if (!Array.isArray(repos) || repos.length === 0) {
+                    break;
+                }
+
+                repositories.push(...repos);
+
+                if (repos.length < 100) {
+                    break;
+                }
+
+                page++;
+            }
+
+            const result = repositories.map(repo => ({
+                id: repo.id,
+                name: repo.name,
+
+                // Additional fields are allowed by the API contract.
+                fullName: repo.full_name,
+                private: repo.private,
+                defaultBranch: repo.default_branch,
+            }));
+
+            return res.json(result);
 
         } catch (error) {
 
-          reject(
-            new Error(
-              `Invalid JSON returned by Python.\n${stdout}`
-            )
-          );
+            return handleGithubError(
+                error,
+                res
+            );
         }
-      }
-    );
+    }
+);
 
-    python.stdin.write(
-      JSON.stringify(payload)
-    );
-
-    python.stdin.end();
-  });
-}
-
-
-/* ============================================================
-   CHECK PINECONE INDEXING STATUS
-   ============================================================ */
+/* =========================================================
+   GET REPOSITORY TREE
+========================================================= */
 
 /*
-   Your vector_store.py uses:
+    GET /api/repositories/:repoId/tree
 
-       namespace = f"{github_id}_{repo_id}"
+    Flow:
 
-   Therefore we check that exact namespace.
+        frontend
+            ↓
+        repoId
+            ↓
+        resolve GitHub repository
+            ↓
+        get recursive GitHub tree
+            ↓
+        check Pinecone
+            ↓
+        if not indexed
+            ↓
+        embed repository
+            ↓
+        return tree
+*/
 
-   We use Pinecone's namespace statistics rather than
-   maintaining a second "embedding exists" database.
+router.get(
+    "/repositories/:repoId/tree",
+    requireAuth,
+    async (req, res) => {
+
+        try {
+
+            const { repoId } = req.params;
+
+            const repository =
+                await resolveRepository(
+                    req,
+                    repoId
+                );
+
+            const owner = repository.owner.login;
+            const repo = repository.name;
+
+            const branch =
+                repository.default_branch;
+
+            /*
+                First get the GitHub tree.
+            */
+
+            const treeResponse =
+                await githubRequest(
+                    req,
+                    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(branch)}?recursive=1`
+                );
+
+            /*
+                Check whether this repository already
+                has vectors in Pinecone.
+            */
+
+            const indexed =
+                await isRepositoryIndexed(
+                    req.user.githubId,
+                    repoId
+                );
+
+            /*
+                If repository isn't indexed,
+                index it now.
+            */
+
+            if (!indexed) {
+
+                console.log(
+                    `Repository ${repoId} is not indexed. Starting indexing...`
+                );
+
+                await indexRepository({
+                    req,
+                    repository,
+                    tree: treeResponse.tree,
+                });
+
+                console.log(
+                    `Repository ${repoId} indexing completed.`
+                );
+            } else {
+
+                console.log(
+                    `Repository ${repoId} already indexed.`
+                );
+            }
+
+            /*
+                Return the original GitHub tree
+                to frontend.
+            */
+
+            return res.json(treeResponse);
+
+        } catch (error) {
+
+            console.error(
+                "Repository tree error:",
+                error
+            );
+
+            if (
+                error.message ===
+                "Invalid repository ID"
+            ) {
+                return res.status(400).json({
+                    error: error.message
+                });
+            }
+
+            return handleGithubError(
+                error,
+                res
+            );
+        }
+    }
+);
+
+/* =========================================================
+   GET FILE CONTENT
+========================================================= */
+
+/*
+    GET /api/repositories/:repoId/file?path=backend/auth.js
+
+    Frontend only sends:
+
+        repoId
+        path
+
+    GitHub token stays on backend.
+*/
+
+router.get(
+    "/repositories/:repoId/file",
+    requireAuth,
+    async (req, res) => {
+
+        try {
+
+            const { repoId } = req.params;
+            const { path: filePath } = req.query;
+
+            if (!filePath) {
+
+                return res.status(400).json({
+                    error: "File path is required"
+                });
+            }
+
+            const repository =
+                await resolveRepository(
+                    req,
+                    repoId
+                );
+
+            const owner = repository.owner.login;
+            const repo = repository.name;
+
+            /*
+                GitHub Contents API
+            */
+
+            const file = await githubRequest(
+                req,
+                `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodePath(filePath)}?ref=${encodeURIComponent(repository.default_branch)}`
+            );
+
+            /*
+                Directories should not be returned as file content.
+            */
+
+            if (Array.isArray(file)) {
+
+                return res.status(400).json({
+                    error: "Requested path is a directory"
+                });
+            }
+
+            /*
+                GitHub normally returns base64 content.
+            */
+
+            if (
+                file.encoding === "base64" &&
+                file.content
+            ) {
+
+                const content =
+                    Buffer.from(
+                        file.content.replace(/\n/g, ""),
+                        "base64"
+                    ).toString("utf-8");
+
+                return res.json({
+                    path: file.path,
+                    content,
+                    encoding: "utf-8"
+                });
+            }
+
+            /*
+                Fallback.
+            */
+
+            return res.json({
+                path: file.path,
+                content: file.content || "",
+                encoding: file.encoding || "utf-8"
+            });
+
+        } catch (error) {
+
+            console.error(
+                "File content error:",
+                error
+            );
+
+            if (
+                error.message ===
+                "Invalid repository ID"
+            ) {
+                return res.status(400).json({
+                    error: error.message
+                });
+            }
+
+            return handleGithubError(
+                error,
+                res
+            );
+        }
+    }
+);
+
+/* =========================================================
+   ENCODE GITHUB FILE PATH
+========================================================= */
+
+function encodePath(filePath) {
+
+    return filePath
+        .split("/")
+        .map(part => encodeURIComponent(part))
+        .join("/");
+}
+
+/* =========================================================
+   PYTHON RUNNER
+========================================================= */
+
+/*
+    Node.js
+        ↓
+    Python
+        ↓
+    RAG_Components/rag_index.py
+
+    JSON is sent through stdin.
+*/
+
+function runPython(code, input) {
+
+    return new Promise(
+        (resolve, reject) => {
+
+            const python =
+                spawn(
+                    PYTHON_BIN,
+                    ["-c", code],
+                    {
+                        cwd: RAG_COMPONENTS_PATH,
+                    }
+                );
+
+            let stdout = "";
+            let stderr = "";
+
+            python.stdout.on(
+                "data",
+                data => {
+                    stdout += data.toString();
+                }
+            );
+
+            python.stderr.on(
+                "data",
+                data => {
+                    stderr += data.toString();
+                }
+            );
+
+            python.on(
+                "error",
+                error => {
+                    reject(error);
+                }
+            );
+
+            python.on(
+                "close",
+                exitCode => {
+
+                    if (exitCode !== 0) {
+
+                        return reject(
+                            new Error(
+                                stderr ||
+                                `Python process exited with code ${exitCode}`
+                            )
+                        );
+                    }
+
+                    try {
+
+                        const result =
+                            JSON.parse(stdout);
+
+                        resolve(result);
+
+                    } catch (error) {
+
+                        reject(
+                            new Error(
+                                `Invalid Python JSON output: ${stdout}`
+                            )
+                        );
+                    }
+                }
+            );
+
+            python.stdin.write(
+                JSON.stringify(input)
+            );
+
+            python.stdin.end();
+        }
+    );
+}
+
+/* =========================================================
+   CHECK PINECONE INDEX
+========================================================= */
+
+/*
+    Namespace format:
+
+        githubId_repoId
+
+    Example:
+
+        123456_987654
 */
 
 async function isRepositoryIndexed(
-  githubId,
-  repoId
+    githubId,
+    repoId
 ) {
 
-  const result = await runPython(
-    `
-import sys
-import json
+    const namespace =
+        `${githubId}_${repoId}`;
 
+    const pythonCode = `
+import json
 from pinecone_db import index
 
-payload = json.load(sys.stdin)
+try:
+    stats = index.describe_index_stats()
 
-github_id = payload["githubId"]
-repo_id = payload["repoId"]
+    namespaces = stats.get("namespaces", {})
+    namespace_stats = namespaces.get("${namespace}", {})
 
-namespace = f"{github_id}_{repo_id}"
+    vector_count = namespace_stats.get(
+        "vector_count",
+        0
+    )
 
-stats = index.describe_index_stats()
+    print(json.dumps({
+        "indexed": vector_count > 0,
+        "vector_count": vector_count
+    }))
 
-namespaces = stats.get("namespaces", {})
+except Exception as e:
 
-namespace_info = namespaces.get(
-    namespace,
-    {}
-)
+    print(json.dumps({
+        "indexed": False,
+        "vector_count": 0,
+        "error": str(e)
+    }))
+`;
 
-vector_count = namespace_info.get(
-    "vector_count",
-    0
-)
+    const result =
+        await runPython(
+            pythonCode,
+            {}
+        );
 
-print(json.dumps({
-    "indexed": vector_count > 0,
-    "vectorCount": vector_count,
-    "namespace": namespace
-}))
-`,
-    {
-      githubId,
-      repoId: String(repoId),
+    if (result.error) {
+
+        console.error(
+            "Pinecone check error:",
+            result.error
+        );
+
+        throw new Error(
+            "Unable to check repository embedding status"
+        );
     }
-  );
 
-  return result;
+    return result.indexed === true;
 }
 
-
-/* ============================================================
-   FILE TYPES THAT SHOULD BE EMBEDDED
-   ============================================================ */
-
-/*
-   Do not try to embed images, videos, binaries, etc.
-
-   This list can be expanded later.
-*/
+/* =========================================================
+   EMBEDDABLE FILE TYPES
+========================================================= */
 
 const EMBEDDABLE_EXTENSIONS = new Set([
-  ".js",
-  ".jsx",
-  ".ts",
-  ".tsx",
 
-  ".py",
+    // JavaScript
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs",
 
-  ".java",
-  ".c",
-  ".h",
-  ".cpp",
-  ".hpp",
-  ".cc",
-  ".cxx",
+    // TypeScript
+    ".ts",
+    ".tsx",
 
-  ".go",
-  ".rs",
-  ".php",
-  ".rb",
+    // Python
+    ".py",
 
-  ".html",
-  ".css",
-  ".scss",
-  ".sass",
+    // Java
+    ".java",
 
-  ".json",
-  ".yaml",
-  ".yml",
-  ".xml",
+    // C / C++
+    ".c",
+    ".h",
+    ".cpp",
+    ".hpp",
+    ".cc",
+    ".cxx",
 
-  ".md",
-  ".txt",
+    // C#
+    ".cs",
 
-  ".sql",
+    // Go
+    ".go",
 
-  ".sh",
-  ".bash",
+    // Rust
+    ".rs",
 
-  ".env.example",
-  ".gitignore",
+    // PHP
+    ".php",
+
+    // Ruby
+    ".rb",
+
+    // Kotlin
+    ".kt",
+
+    // Swift
+    ".swift",
+
+    // Dart
+    ".dart",
+
+    // HTML / CSS
+    ".html",
+    ".htm",
+    ".css",
+    ".scss",
+    ".sass",
+    ".less",
+
+    // JSON / YAML / config
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+
+    // Shell
+    ".sh",
+    ".bash",
+
+    // SQL
+    ".sql",
+
+    // Markdown / text
+    ".md",
+    ".txt",
+
+    // XML
+    ".xml"
 ]);
 
-
-/* ============================================================
-   SHOULD EMBED FILE?
-   ============================================================ */
+/* =========================================================
+   SHOULD EMBED FILE
+========================================================= */
 
 function shouldEmbedFile(filePath) {
 
-  const lowerPath =
-    filePath.toLowerCase();
+    const lowerPath =
+        filePath.toLowerCase();
 
-  /*
-     Ignore common generated/dependency folders.
-  */
+    /*
+        Ignore common generated/dependency directories.
+    */
 
-  const ignoredDirectories = [
-    "node_modules/",
-    ".git/",
-    "dist/",
-    "build/",
-    "__pycache__/",
-    ".venv/",
-    "venv/",
-    "coverage/",
-    ".next/",
-    "target/",
-  ];
+    const ignoredDirectories = [
+        "node_modules/",
+        ".git/",
+        "dist/",
+        "build/",
+        "target/",
+        "__pycache__/",
+        ".next/",
+        "coverage/",
+        "vendor/"
+    ];
 
-  for (
-    const directory
-    of ignoredDirectories
-  ) {
+    for (
+        const directory
+        of ignoredDirectories
+    ) {
+
+        if (
+            lowerPath.includes(directory)
+        ) {
+            return false;
+        }
+    }
+
+    const extension =
+        path.extname(lowerPath);
+
+    return EMBEDDABLE_EXTENSIONS.has(
+        extension
+    );
+}
+
+/* =========================================================
+   GET GITHUB BLOB CONTENT
+========================================================= */
+
+async function getBlobContent(
+    req,
+    owner,
+    repo,
+    sha
+) {
+
+    const blob =
+        await githubRequest(
+            req,
+            `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs/${encodeURIComponent(sha)}`
+        );
 
     if (
-      lowerPath.includes(directory)
+        blob.encoding !== "base64"
     ) {
-      return false;
+
+        return blob.content || "";
     }
-  }
-
-  const lastDot =
-    lowerPath.lastIndexOf(".");
-
-  if (lastDot === -1) {
-    return false;
-  }
-
-  const extension =
-    lowerPath.substring(lastDot);
-
-  return EMBEDDABLE_EXTENSIONS.has(
-    extension
-  );
-}
-
-
-/* ============================================================
-   GET FILE CONTENT FROM GITHUB
-   ============================================================ */
-
-async function getGitHubFile(
-  req,
-  repository,
-  filePath
-) {
-
-  /*
-     Encode every path segment separately.
-
-     Example:
-
-         backend/auth.js
-
-     becomes:
-
-         backend/auth.js
-
-     while special characters are safely encoded.
-  */
-
-  const encodedPath =
-    filePath
-      .split("/")
-      .map(
-        (segment) =>
-          encodeURIComponent(segment)
-      )
-      .join("/");
-
-  return await githubRequest(
-    req.user.accessToken,
-
-    `/repos/${repository.full_name}/contents/${encodedPath}`
-  );
-}
-
-
-/* ============================================================
-   GET FILE CONTENT AS UTF-8
-   ============================================================ */
-
-async function getFileContent(
-  req,
-  repository,
-  filePath
-) {
-
-  const file =
-    await getGitHubFile(
-      req,
-      repository,
-      filePath
-    );
-
-  if (Array.isArray(file)) {
-
-    const error = new Error(
-      "Requested path is a directory."
-    );
-
-    error.status = 400;
-
-    throw error;
-  }
-
-  if (!file.content) {
-    return "";
-  }
-
-  if (
-    file.encoding === "base64"
-  ) {
 
     return Buffer.from(
-      file.content.replace(/\n/g, ""),
-      "base64"
+        blob.content,
+        "base64"
     ).toString("utf-8");
-  }
-
-  return file.content;
 }
 
-
-/* ============================================================
+/* =========================================================
    INGEST ONE FILE
-   ============================================================ */
+========================================================= */
 
-/*
-   Calls the EXISTING:
+async function ingestFile({
+    code,
+    githubId,
+    repoId,
+    filePath
+}) {
 
-       rag_index.py
-           ingest_file()
-
-   which internally does:
-
-       chunker()
-           ↓
-       store_chunks()
-           ↓
-       embedding()
-           ↓
-       Pinecone
-*/
-
-async function ingestFile(
-  code,
-  githubId,
-  repoId,
-  filePath
-) {
-
-  return await runPython(
-    `
-import sys
+    const pythonCode = `
 import json
+import sys
 
 from rag_index import ingest_file
 
-payload = json.load(sys.stdin)
+data = json.loads(
+    sys.stdin.read()
+)
 
 ingest_file(
-    code=payload["code"],
-    github_id=payload["githubId"],
-    repo_id=payload["repoId"],
-    file_path=payload["filePath"]
+    code=data["code"],
+    github_id=data["githubId"],
+    repo_id=data["repoId"],
+    file_path=data["filePath"]
 )
 
 print(json.dumps({
-    "success": True,
-    "filePath": payload["filePath"]
+    "success": True
 }))
-`,
-    {
-      code,
-      githubId,
-      repoId: String(repoId),
-      filePath,
-    }
-  );
+`;
+
+    return runPython(
+        pythonCode,
+        {
+            code,
+            githubId,
+            repoId: String(repoId),
+            filePath
+        }
+    );
 }
 
-
-/* ============================================================
+/* =========================================================
    INDEX ENTIRE REPOSITORY
-   ============================================================ */
-
-async function indexRepository(
-  req,
-  repository,
-  tree
-) {
-
-  const githubId =
-    String(req.user.githubId);
-
-  const repoId =
-    String(repository.id);
-
-  /*
-     Prevent multiple simultaneous requests from
-     indexing the same repository.
-  */
-
-  const lockKey =
-    indexingLockKey(
-      githubId,
-      repoId
-    );
-
-  const lockAcquired =
-    await redis.set(
-      lockKey,
-      "1",
-      {
-        NX: true,
-        EX: 600,
-      }
-    );
-
-  /*
-     Another request is currently indexing.
-
-     Wait until that process finishes.
-  */
-
-  if (!lockAcquired) {
-
-    console.log(
-      `Repository ${repoId} is already being indexed.`
-    );
-
-    for (
-      let attempt = 0;
-      attempt < 120;
-      attempt++
-    ) {
-
-      await new Promise(
-        (resolve) =>
-          setTimeout(resolve, 1000)
-      );
-
-      const currentStatus =
-        await isRepositoryIndexed(
-          githubId,
-          repoId
-        );
-
-      if (
-        currentStatus.indexed
-      ) {
-        return currentStatus;
-      }
-    }
-
-    throw new Error(
-      "Repository indexing timeout."
-    );
-  }
-
-  try {
-
-    /*
-       Check again after acquiring the lock.
-
-       Another request might have finished indexing
-       before we acquired it.
-    */
-
-    const currentStatus =
-      await isRepositoryIndexed(
-        githubId,
-        repoId
-      );
-
-    if (currentStatus.indexed) {
-      return currentStatus;
-    }
-
-    const files =
-      (tree.tree || [])
-        .filter(
-          (item) =>
-            item.type === "blob"
-        )
-        .filter(
-          (item) =>
-            shouldEmbedFile(item.path)
-        );
-
-    console.log(
-      `Indexing ${files.length} files for ${repository.full_name}`
-    );
-
-    let indexedFiles = 0;
-
-    /*
-       Process sequentially.
-
-       This avoids hammering GitHub and the embedding API
-       with a huge amount of parallel work.
-    */
-
-    for (
-      const file
-      of files
-    ) {
-
-      try {
-
-        console.log(
-          `Embedding: ${file.path}`
-        );
-
-        const code =
-          await getFileContent(
-            req,
-            repository,
-            file.path
-          );
-
-        /*
-           Skip empty files.
-        */
-
-        if (
-          !code ||
-          !code.trim()
-        ) {
-          continue;
-        }
-
-        await ingestFile(
-          code,
-          githubId,
-          repoId,
-          file.path
-        );
-
-        indexedFiles++;
-
-      } catch (error) {
-
-        /*
-           One unsupported/problematic file should not
-           destroy the entire repository indexing process.
-        */
-
-        console.error(
-          `Failed to index ${file.path}:`,
-          error.message
-        );
-      }
-    }
-
-    /*
-       Verify Pinecone actually contains vectors.
-    */
-
-    const finalStatus =
-      await isRepositoryIndexed(
-        githubId,
-        repoId
-      );
-
-    if (
-      !finalStatus.indexed
-    ) {
-
-      throw new Error(
-        "Repository indexing completed but no embeddings were found in Pinecone."
-      );
-    }
-
-    return {
-      ...finalStatus,
-      indexedFiles,
-      totalFiles: files.length,
-    };
-
-  } finally {
-
-    await redis.del(lockKey);
-  }
-}
-
-
-/* ============================================================
-   GET /api/repositories
-   ============================================================ */
-
-router.get(
-  "/repositories",
-  requireAuth,
-
-  async (req, res) => {
-
-    try {
-
-      const repositories = [];
-
-      let page = 1;
-
-      while (true) {
-
-        const pageData =
-          await githubRequest(
-            req.user.accessToken,
-
-            `/user/repos?per_page=100&page=${page}&sort=updated`
-          );
-
-        if (
-          !Array.isArray(pageData)
-        ) {
-          break;
-        }
-
-        repositories.push(
-          ...pageData
-        );
-
-        if (
-          pageData.length < 100
-        ) {
-          break;
-        }
-
-        page++;
-      }
-
-      const result =
-        repositories.map(
-          (repo) => ({
-            id: repo.id,
-            name: repo.name,
-            full_name: repo.full_name,
-            private: repo.private,
-            default_branch:
-              repo.default_branch,
-          })
-        );
-
-      return res.status(200).json(
-        result
-      );
-
-    } catch (error) {
-
-      console.error(
-        "GET /api/repositories:",
-        error
-      );
-
-      return res
-        .status(error.status || 500)
-        .json({
-          error:
-            "Failed to fetch repositories.",
-          message:
-            error.message,
-        });
-    }
-  }
-);
-
-
-/* ============================================================
-   GET /api/repositories/:repoId/tree
-   ============================================================ */
-
-router.get(
-  "/repositories/:repoId/tree",
-  requireAuth,
-
-  async (req, res) => {
-
-    try {
-
-      const {
-        repoId
-      } = req.params;
-
-      const repository =
-        await resolveRepository(
-          req,
-          repoId
-        );
-
-      const tree =
-        await getRepositoryTree(
-          req,
-          repository
-        );
-
-      return res.status(200).json(
-        tree
-      );
-
-    } catch (error) {
-
-      console.error(
-        "GET /api/repositories/:repoId/tree:",
-        error
-      );
-
-      return res
-        .status(error.status || 500)
-        .json({
-          error:
-            "Failed to fetch repository tree.",
-          message:
-            error.message,
-        });
-    }
-  }
-);
-
-
-/* ============================================================
-   GET /api/repositories/:repoId/file?path=...
-   ============================================================ */
-
-router.get(
-  "/repositories/:repoId/file",
-  requireAuth,
-
-  async (req, res) => {
-
-    try {
-
-      const {
-        repoId
-      } = req.params;
-
-      const {
-        path: filePath
-      } = req.query;
-
-      if (!filePath) {
-
-        return res.status(400).json({
-          error:
-            "File path is required.",
-        });
-      }
-
-      const repository =
-        await resolveRepository(
-          req,
-          repoId
-        );
-
-      const content =
-        await getFileContent(
-          req,
-          repository,
-          filePath
-        );
-
-      return res.status(200).json({
-        path: filePath,
-        content,
-        encoding: "utf-8",
-      });
-
-    } catch (error) {
-
-      console.error(
-        "GET /api/repositories/:repoId/file:",
-        error
-      );
-
-      return res
-        .status(error.status || 500)
-        .json({
-          error:
-            "Failed to fetch file.",
-          message:
-            error.message,
-        });
-    }
-  }
-);
-
-
-/* ============================================================
-   POST /api/rag/chat
-   ============================================================ */
-
-router.post(
-  "/rag/chat",
-  requireAuth,
-
-  async (req, res) => {
-
-    try {
-
-      const {
-        repoId,
-        fileName,
-        query,
-      } = req.body;
-
-      /* --------------------------------------------------------
-         VALIDATION
-         -------------------------------------------------------- */
-
-      if (!repoId) {
-
-        return res.status(400).json({
-          error:
-            "repoId is required.",
-        });
-      }
-
-      if (
-        !query ||
-        !query.trim()
-      ) {
-
-        return res.status(400).json({
-          error:
-            "query is required.",
-        });
-      }
-
-
-      /* --------------------------------------------------------
-         RESOLVE REPOSITORY
-         -------------------------------------------------------- */
-
-      const repository =
-        await resolveRepository(
-          req,
-          repoId
-        );
-
-
-      /* --------------------------------------------------------
-         GET REPOSITORY TREE
-         -------------------------------------------------------- */
-
-      const tree =
-        await getRepositoryTree(
-          req,
-          repository
-        );
-
-      const repositoryStructure =
-        treeToText(tree);
-
-
-      /* --------------------------------------------------------
-         CHECK EMBEDDINGS
-         -------------------------------------------------------- */
-
-      const githubId =
+========================================================= */
+
+async function indexRepository({
+    req,
+    repository,
+    tree
+}) {
+
+    const githubId =
         String(req.user.githubId);
 
-      const embeddingStatus =
-        await isRepositoryIndexed(
-          githubId,
-          repoId
+    const repoId =
+        String(repository.id);
+
+    const owner =
+        repository.owner.login;
+
+    const repo =
+        repository.name;
+
+    /*
+        Only GitHub blobs are files.
+    */
+
+    const files =
+        tree.filter(
+            item =>
+                item.type === "blob" &&
+                item.sha &&
+                item.path &&
+                shouldEmbedFile(item.path)
         );
 
+    console.log(
+        `Found ${files.length} embeddable files in ${repository.full_name}`
+    );
 
-      /* --------------------------------------------------------
-         INDEX IF REQUIRED
-         -------------------------------------------------------- */
+    let processed = 0;
 
-      let indexingStatus =
-        embeddingStatus;
+    for (
+        const file
+        of files
+    ) {
 
-      if (
-        !embeddingStatus.indexed
-      ) {
+        try {
 
-        console.log(
-          `No embeddings found for ${repository.full_name}. Starting indexing...`
-        );
+            console.log(
+                `Embedding ${file.path}`
+            );
 
-        indexingStatus =
-          await indexRepository(
-            req,
-            repository,
-            tree
-          );
+            const code =
+                await getBlobContent(
+                    req,
+                    owner,
+                    repo,
+                    file.sha
+                );
 
-      } else {
+            /*
+                Skip obviously empty files.
+            */
 
-        console.log(
-          `Embeddings already exist for ${repository.full_name}. Skipping indexing.`
-        );
-      }
+            if (!code || !code.trim()) {
+                continue;
+            }
 
+            await ingestFile({
+                code,
+                githubId,
+                repoId,
+                filePath: file.path
+            });
 
-      /* --------------------------------------------------------
-         GET EXISTING SUMMARIES FROM REDIS
-         -------------------------------------------------------- */
+            processed++;
 
-      /*
-         The summary generators are NOT implemented yet.
+        } catch (error) {
 
-         Therefore we only read whatever may already exist.
+            /*
+                Don't allow one problematic/binary
+                file to destroy the entire indexing process.
+            */
 
-         Later:
-
-             projectsummary.py
-             chatsummary.py
-
-         will populate/update these values.
-      */
-
-      const [
-        projectSummary,
-        chatSummary,
-      ] = await Promise.all([
-        redis.get(
-          projectSummaryKey(
-            githubId,
-            repoId
-          )
-        ),
-
-        redis.get(
-          chatSummaryKey(
-            githubId,
-            repoId
-          )
-        ),
-      ]);
-
-
-      /* --------------------------------------------------------
-         CURRENT CHAT HISTORY
-         -------------------------------------------------------- */
-
-      const historyKey =
-        chatHistoryKey(
-          githubId,
-          repoId
-        );
-
-      const chatHistory =
-        await redis.lRange(
-          historyKey,
-          0,
-          -1
-        );
-
-
-      /* --------------------------------------------------------
-         EXECUTE EXISTING RAG PIPELINE
-         -------------------------------------------------------- */
-
-      /*
-         Existing rag_index.py expects:
-
-             project_context
-             repository_structure
-             summarized_chat_history
-             query
-             github_id
-             repo_id
-
-         See your existing ask_question() implementation.
-      */
-
-      const ragResult =
-        await runPython(
-          `
-import sys
-import json
-
-from rag_index import ask_question
-
-payload = json.load(sys.stdin)
-
-answer = ask_question(
-    project_context=payload["projectContext"],
-    repository_structure=payload["repositoryStructure"],
-    summarized_chat_history=payload["chatSummary"],
-    query=payload["query"],
-    github_id=payload["githubId"],
-    repo_id=payload["repoId"]
-)
-
-print(json.dumps({
-    "answer": answer
-}))
-`,
-          {
-            projectContext:
-              projectSummary || "",
-
-            repositoryStructure,
-
-            chatSummary:
-              chatSummary || "",
-
-            query:
-              query.trim(),
-
-            githubId,
-
-            repoId:
-              String(repoId),
-          }
-        );
-
-
-      const answer =
-        ragResult.answer || "";
-
-
-      /* --------------------------------------------------------
-         STORE CONVERSATION IN REDIS
-         -------------------------------------------------------- */
-
-      const conversation =
-        JSON.stringify({
-          question:
-            query.trim(),
-
-          answer,
-
-          fileName:
-            fileName || null,
-
-          timestamp:
-            new Date().toISOString(),
-        });
-
-      await redis.rPush(
-        historyKey,
-        conversation
-      );
-
-
-      /* --------------------------------------------------------
-         SUMMARY UPDATE HOOK
-         -------------------------------------------------------- */
-
-      /*
-         DO NOT GENERATE SUMMARIES HERE YET.
-
-         We will add:
-
-             projectsummary.py
-             chatsummary.py
-
-         later.
-
-         At that point this section becomes:
-
-             1. current query executed
-             2. answer generated
-             3. Q&A stored in Redis
-             4. project summary updated
-             5. chat summary updated
-      */
-
-
-      /* --------------------------------------------------------
-         RESPONSE
-         -------------------------------------------------------- */
-
-      return res.status(200).json({
-        answer,
-      });
-
-    } catch (error) {
-
-      console.error(
-        "POST /api/rag/chat:",
-        error
-      );
-
-      return res
-        .status(error.status || 500)
-        .json({
-          error:
-            "RAG request failed.",
-          message:
-            error.message,
-        });
+            console.error(
+                `Failed to embed ${file.path}:`,
+                error.message
+            );
+        }
     }
-  }
-);
 
+    console.log(
+        `Indexed ${processed}/${files.length} files for ${repository.full_name}`
+    );
 
-/* ============================================================
-   EXPORT
-   ============================================================ */
+    return {
+        filesFound: files.length,
+        filesProcessed: processed
+    };
+}
+
+/* =========================================================
+   EXPORT ROUTER
+========================================================= */
 
 export default router;
