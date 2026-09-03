@@ -1,74 +1,392 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sensei — Learn & Build</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    :root{--bg:#080b11;--panel:#0d1119;--panel2:#111722;--panel3:#151c28;--border:#263041;--text:#e6edf3;--muted:#8b98a8;--purple:#8b5cf6;--purple2:#a78bfa;--green:#3fb950;--red:#f85149}
-    html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-    button,input,textarea{font:inherit}button{color:inherit}
-    .app{height:100vh;display:flex;flex-direction:column;min-width:900px}
-    .topbar{height:58px;flex:0 0 58px;display:flex;align-items:center;border-bottom:1px solid var(--border);background:#090d14;padding:0 16px;z-index:20}
-    .brand{display:flex;align-items:center;gap:10px;min-width:250px}.brand-logo{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(135deg,#7c3aed,#4f46e5);font:800 13px monospace}.brand-name{font-weight:700}.brand-sub{font-size:11px;color:var(--muted);margin-left:5px}
-    .status{margin:auto;display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}.status-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px rgba(63,185,80,.5)}
-    .actions{min-width:250px;display:flex;justify-content:flex-end;gap:8px;position:relative}.btn{height:34px;padding:0 11px;border:1px solid var(--border);border-radius:7px;background:#0d121a;color:var(--muted);cursor:pointer}.btn:hover{color:var(--text);background:#121924;border-color:#3a4658}.btn.primary{background:#6d3ee8;border-color:#7c4aed;color:white}.btn.primary:hover{background:#7c3aed}.icon{width:34px;padding:0;display:grid;place-items:center}
-    .github-mark{width:17px;height:17px;fill:currentColor}.github-connect{display:flex;align-items:center;gap:8px;color:#fff}.avatar{width:35px;height:35px;border-radius:50%;border:1px solid var(--border);background:linear-gradient(135deg,#7c3aed,#4f46e5);display:grid;place-items:center;font-size:12px;font-weight:700;overflow:hidden}.avatar img{width:100%;height:100%;object-fit:cover}
-    .menu{position:absolute;right:0;top:43px;width:230px;background:#111722;border:1px solid var(--border);border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.55);display:none;overflow:hidden}.menu.open{display:block}.menu-head{padding:14px;border-bottom:1px solid var(--border)}.menu-head strong{display:block;font-size:13px}.menu-head span{display:block;color:var(--muted);font-size:11px;margin-top:3px}.menu-item{width:100%;padding:12px 14px;border:0;background:none;text-align:left;color:var(--muted);cursor:pointer}.menu-item:hover{background:rgba(139,92,246,.12);color:var(--text)}
-    .workspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(210px,27%) 1fr minmax(280px,32%);overflow:hidden}.panel{min-width:0;min-height:0;background:var(--panel);display:flex;flex-direction:column;overflow:hidden}.repo-panel{border-right:1px solid var(--border)}.chat-panel{border-left:1px solid var(--border)}
-    .resizer{width:6px;flex:0 0 6px;cursor:col-resize;background:#0a0e15;position:relative;z-index:10}.resizer:hover,.resizer.dragging{background:rgba(139,92,246,.7)}.resizer:after{content:"⋮";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#526075;font-size:14px}
-    .panel-head{height:48px;flex:0 0 48px;display:flex;align-items:center;padding:0 13px;border-bottom:1px solid var(--border);background:#0d121a}.title{font:600 12px "Fira Code",monospace;color:#dbe5ef}.sub{font:400 11px "Fira Code",monospace;color:#657286;margin-left:7px}.spacer{flex:1}.head-btn{width:28px;height:28px;border:0;background:none;color:var(--muted);border-radius:5px;cursor:pointer}.head-btn:hover{background:var(--panel3);color:var(--text)}
-    .repo-controls{padding:10px;border-bottom:1px solid #1b2431}.repo-select{width:100%;height:37px;background:#111722;border:1px solid var(--border);border-radius:7px;color:var(--text);padding:0 10px;outline:none}.repo-select:focus{border-color:var(--purple)}.repo-meta{font-size:10px;color:var(--muted);padding-top:8px}.tree{flex:1;overflow:auto;padding:7px 5px 20px}.tree::-webkit-scrollbar,.messages::-webkit-scrollbar{width:7px}.tree::-webkit-scrollbar-thumb,.messages::-webkit-scrollbar-thumb{background:#283243;border-radius:10px}.row{height:29px;display:flex;align-items:center;gap:7px;border-radius:5px;color:#aeb9c8;font-size:12px;cursor:pointer;user-select:none}.row:hover{background:#141b27;color:#eef3f8}.row .arrow{width:13px;text-align:center;color:#657286;font-size:9px}.row .file-icon{width:15px;text-align:center;color:#58a6ff;font-size:11px}.row.folder .file-icon{color:#eab308}.children{display:none}.children.open{display:block}.empty{text-align:center;color:#657286;font-size:11px;line-height:1.7;padding:35px 15px}
-    .editor-panel{background:#0b0f16}.editor-bar{height:48px;flex:0 0 48px;display:flex;align-items:center;padding:0 13px;border-bottom:1px solid var(--border);background:#0d121a}.editor-tabs{height:36px;flex:0 0 36px;display:flex;overflow-x:auto;border-bottom:1px solid var(--border);background:#090d13}.tab{min-width:130px;max-width:230px;padding:0 11px;display:flex;align-items:center;gap:8px;border-right:1px solid #1b2431;color:var(--muted);font:11px "Fira Code",monospace;cursor:pointer}.tab.active{color:var(--text);background:#0f141d;border-top:1px solid var(--purple)}.tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.tab-close{color:#657286}.tab-close:hover{color:var(--text)}#editor{flex:1;min-height:0}.editor-footer{height:26px;flex:0 0 26px;border-top:1px solid var(--border);display:flex;align-items:center;padding:0 10px;color:#657286;font:10px "Fira Code",monospace;background:#0b0f15}
-    .messages{flex:1;min-height:0;overflow:auto;padding:15px 12px}.message{display:flex;gap:8px;margin-bottom:15px;font-size:12px;line-height:1.55}.message.user{flex-direction:row-reverse}.msg-avatar{width:25px;height:25px;flex:0 0 25px;border-radius:7px;display:grid;place-items:center;background:#202938;color:var(--muted);font-size:9px;font-weight:700}.message.assistant .msg-avatar{background:rgba(139,92,246,.18);color:var(--purple2)}.bubble{max-width:88%;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:#101621;color:#c5cfda;white-space:pre-wrap;overflow-wrap:anywhere}.message.user .bubble{background:#171326;border-color:rgba(139,92,246,.25);color:#ded8ef}.chat-input-wrap{padding:10px;border-top:1px solid var(--border);background:#0c1119}.chat-box{border:1px solid var(--border);border-radius:9px;background:#101620;overflow:hidden}.chat-input{display:block;width:100%;height:82px;resize:none;border:0;outline:0;background:none;color:var(--text);padding:10px;font-size:12px}.chat-input::placeholder{color:#536174}.chat-actions{display:flex;justify-content:flex-end;padding:5px;border-top:1px solid #1b2431}.send{height:29px;padding:0 12px;border:0;border-radius:6px;background:var(--purple);color:#fff;font-size:11px;cursor:pointer}.send:disabled{opacity:.45;cursor:not-allowed}.typing{display:none;color:var(--muted);font-size:10px;padding:4px 12px 7px}.typing.show{display:block}
-    .toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,12px);opacity:0;pointer-events:none;background:#151c28;border:1px solid var(--border);border-radius:8px;padding:9px 13px;font-size:11px;transition:.2s;z-index:100}.toast.show{opacity:1;transform:translate(-50%,0)}
-    @media(max-width:1050px){.app{min-width:800px}.workspace{grid-template-columns:minmax(190px,25%) 1fr minmax(270px,32%)}}
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sensei — Learn & Build</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
+<style>
+  /* ================================================================
+     Primer-inspired tokens (GitHub's own light-theme design system)
+     ================================================================ */
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --canvas:#0d1117;
+    --canvas-subtle:#161b22;
+    --canvas-inset:#010409;
+    --header-bg:#010409;
+    --border:#30363d;
+    --border-muted:#21262d;
+    --fg:#e6edf3;
+    --fg-muted:#8b949e;
+    --fg-subtle:#6e7681;
+    --accent:#58a6ff;
+    --accent-subtle:rgba(56,139,253,.15);
+    --success:#3fb950;
+    --success-emphasis:#238636;
+    --success-hover:#2ea043;
+    --danger:#f85149;
+    --neutral-muted:rgba(110,118,129,.3);
+    --folder:#58a6ff;
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    --font-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--canvas);color:var(--fg);font-family:var(--font-ui);font-size:14px}
+  button,input,textarea,select{font:inherit;color:inherit}
+  button{cursor:pointer}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  .app{height:100vh;display:flex;flex-direction:column;min-width:960px}
+
+  /* ================= HEADER (GitHub-style dark topbar) ================= */
+  .topbar{
+    height:62px;flex:0 0 62px;display:flex;align-items:center;gap:16px;
+    padding:0 16px;background:var(--header-bg);color:#fff;
+    border-bottom:1px solid #1b1f24;
+  }
+  .brand{display:flex;align-items:center;gap:8px;min-width:180px}
+  .brand-mark{width:32px;height:32px;display:grid;place-items:center;color:#fff}
+  .brand-mark svg{width:28px;height:28px}
+  .brand-text{display:flex;flex-direction:column;line-height:1.15}
+  .brand-text strong{font-size:15px;font-weight:600}
+  .brand-text span{font-size:11px;color:#9198a1}
+
+  .crumb{display:flex;align-items:center;gap:6px;font-size:14px;color:#9198a1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .crumb strong{color:#fff;font-weight:600}
+  .crumb .sep{color:#6e7681}
+
+  .topbar-spacer{flex:1}
+
+  .status-pill{
+    display:flex;align-items:center;gap:6px;font-size:12px;color:#9198a1;
+    border:1px solid #3d444d;border-radius:999px;padding:4px 10px;
+  }
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--success-emphasis);box-shadow:0 0 6px rgba(45,164,78,.6)}
+  .status-dot.off{background:#6e7681;box-shadow:none}
+
+  .top-actions{display:flex;align-items:center;gap:8px;position:relative}
+
+  .gh-btn{
+    height:32px;padding:0 12px;border-radius:6px;font-size:12px;font-weight:600;
+    border:1px solid #3d444d;background:#21262d;color:#e6edf3;display:flex;align-items:center;gap:6px;
+  }
+  .gh-btn:hover{background:#30363d;border-color:#525a64}
+  .gh-btn.icon-only{width:32px;padding:0;justify-content:center}
+
+  .gh-btn.primary{
+    background:var(--success-emphasis);border-color:rgba(27,31,36,.15);color:#fff;
+  }
+  .gh-btn.primary:hover{background:var(--success-hover)}
+  .gh-btn.primary svg{fill:#fff}
+
+  .github-mark{width:16px;height:16px;fill:currentColor;flex:0 0 16px}
+
+  .avatar-btn{
+    width:32px;height:32px;border-radius:50%;border:1px solid #3d444d;overflow:hidden;
+    background:linear-gradient(135deg,#39424e,#20262d);color:#fff;display:grid;place-items:center;
+    font-size:12px;font-weight:700;padding:0;
+  }
+  .avatar-btn img{width:100%;height:100%;object-fit:cover}
+
+  .menu{
+    position:absolute;right:0;top:42px;width:250px;background:var(--canvas);
+    border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(140,149,159,.3);
+    overflow:hidden;display:none;z-index:50;color:var(--fg);
+  }
+  .menu.open{display:block}
+  .menu-head{padding:12px 14px;border-bottom:1px solid var(--border-muted)}
+  .menu-head strong{display:block;font-size:13px}
+  .menu-head span{display:block;color:var(--fg-muted);font-size:11px;margin-top:2px}
+  .menu-item{
+    width:100%;padding:9px 14px;border:0;background:none;text-align:left;
+    color:var(--fg);font-size:13px;display:flex;align-items:center;gap:8px;
+  }
+  .menu-item:hover{background:var(--canvas-subtle)}
+  .menu-item.danger{color:var(--danger)}
+  .menu-item.danger:hover{background:rgba(248,81,73,.12)}
+  .menu-divider{height:1px;background:var(--border-muted);margin:4px 0}
+
+  /* ================= WORKSPACE ================= */
+  .workspace{
+    flex:1;min-height:0;display:flex;flex-direction:row;
+    background:var(--canvas-subtle);
+    overflow:hidden;
+  }
+  .panel{min-width:0;min-height:0;height:100%;background:var(--canvas);display:flex;flex-direction:column;overflow:hidden}
+  .repo-panel{flex:0 0 240px;width:240px;min-width:190px;max-width:480px}
+  .editor-panel{flex:1 1 auto;min-width:480px}
+  .chat-panel{flex:0 0 400px;width:400px;min-width:320px;max-width:640px}
+  .workspace.repo-hidden .repo-panel{flex-basis:0;width:0;min-width:0;border-width:0}
+  .workspace.chat-hidden .chat-panel{flex-basis:0;width:0;min-width:0;border-width:0}
+  .repo-panel{border-right:1px solid var(--border)}
+  .chat-panel{border-left:1px solid var(--border)}
+
+  .resizer{width:6px;flex:0 0 6px;cursor:col-resize;background:var(--canvas-subtle);position:relative;z-index:10;border-left:1px solid var(--border-muted);border-right:1px solid var(--border-muted)}
+  .resizer:hover,.resizer.dragging{background:var(--accent-subtle)}
+  .resizer::after{content:"";position:absolute;left:50%;top:50%;width:2px;height:24px;background:var(--border);transform:translate(-50%,-50%);border-radius:2px}
+  .resizer:hover::after,.resizer.dragging::after{background:var(--accent)}
+
+  /* ---- shared panel header (like GitHub's file-header / sidebar section header) ---- */
+  .panel-head{
+    height:48px;flex:0 0 48px;display:flex;align-items:center;gap:8px;
+    padding:0 12px;border-bottom:1px solid var(--border);background:var(--canvas-subtle);
+  }
+  .panel-head .title{font-size:13px;font-weight:600;color:var(--fg)}
+  .panel-head .sub{font-size:11px;color:var(--fg-muted);font-family:var(--font-mono)}
+  .panel-head .spacer{flex:1}
+  .head-btn{
+    width:26px;height:26px;border:1px solid transparent;background:none;color:var(--fg-muted);
+    border-radius:6px;display:grid;place-items:center;
+  }
+  .head-btn:hover{background:var(--neutral-muted);border-color:var(--border);color:var(--fg)}
+
+  /* ================= REPOSITORY PANEL (left) ================= */
+  .repo-controls{padding:10px;border-bottom:1px solid var(--border-muted)}
+  .repo-select{
+    width:100%;height:34px;background:var(--canvas);border:1px solid var(--border);
+    border-radius:6px;color:var(--fg);padding:0 10px;outline:none;font-size:13px;
+  }
+  .repo-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-subtle)}
+  .repo-meta{font-size:11px;color:var(--fg-muted);padding-top:8px;display:flex;align-items:center;gap:6px}
+  .repo-meta::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--success-emphasis)}
+
+  .tree{flex:1;overflow:auto;padding:6px 4px 20px}
+  .tree::-webkit-scrollbar,.messages::-webkit-scrollbar{width:8px}
+  .tree::-webkit-scrollbar-thumb,.messages::-webkit-scrollbar-thumb{background:#d0d7de;border-radius:10px}
+
+  .row{
+    height:30px;display:flex;align-items:center;gap:6px;border-radius:6px;
+    color:var(--fg);font-size:13px;user-select:none;
+  }
+  .row:hover{background:var(--canvas-subtle)}
+  .row.active{background:var(--accent-subtle)}
+  .row .arrow{width:14px;text-align:center;color:var(--fg-muted);font-size:9px;flex:0 0 14px}
+  .row .file-icon{width:16px;text-align:center;flex:0 0 16px;display:grid;place-items:center}
+  .row .file-icon svg{width:15px;height:15px}
+  .row.folder .file-icon svg{fill:var(--folder)}
+  .row.file .file-icon svg{fill:var(--fg-muted)}
+  .row-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .children{display:none}
+  .children.open{display:block}
+  .empty{text-align:center;color:var(--fg-muted);font-size:12px;line-height:1.7;padding:35px 16px}
+
+  /* ================= EDITOR PANEL (middle) ================= */
+  .editor-panel{background:var(--canvas)}
+  .editor-bar{
+    height:48px;flex:0 0 48px;display:flex;align-items:center;gap:8px;
+    padding:0 13px;border-bottom:1px solid var(--border);background:var(--canvas-subtle);
+  }
+  .file-path{
+    display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:12px;color:var(--fg-muted);
+    overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  }
+  .file-path strong{color:var(--fg);font-weight:600}
+
+  .editor-tabs{
+    height:38px;flex:0 0 38px;display:flex;overflow-x:auto;
+    border-bottom:1px solid var(--border);background:var(--canvas);
+  }
+  .tab{
+    min-width:130px;max-width:230px;padding:0 10px;display:flex;align-items:center;gap:8px;
+    border-right:1px solid var(--border-muted);color:var(--fg-muted);
+    font:12px var(--font-mono);
+  }
+  .tab.active{color:var(--fg);background:var(--canvas-subtle);box-shadow:inset 0 -2px 0 var(--accent)}
+  .tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;cursor:pointer}
+  .tab-close{color:var(--fg-subtle);border-radius:4px;width:16px;height:16px;display:grid;place-items:center}
+  .tab-close:hover{background:var(--neutral-muted);color:var(--fg)}
+
+  #editor{flex:1;min-height:0}
+
+  .editor-footer{
+    height:28px;flex:0 0 28px;border-top:1px solid var(--border);display:flex;align-items:center;
+    padding:0 12px;color:var(--fg-muted);font:11px var(--font-mono);background:var(--canvas-subtle);
+  }
+
+  /* ================= CHAT PANEL (right) ================= */
+  .messages{flex:1;min-height:0;overflow:auto;padding:14px 12px}
+  .message{display:flex;gap:8px;margin-bottom:14px;font-size:13px;line-height:1.55}
+  .message.user{flex-direction:row-reverse}
+  .msg-avatar{
+    width:26px;height:26px;flex:0 0 26px;border-radius:6px;display:grid;place-items:center;
+    background:var(--canvas-subtle);border:1px solid var(--border-muted);color:var(--fg-muted);
+    font-size:10px;font-weight:700;
+  }
+  .message.assistant .msg-avatar{background:var(--accent-subtle);border-color:rgba(56,139,253,.35);color:var(--accent)}
+  .bubble{
+    max-width:88%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;
+    background:var(--canvas-subtle);color:var(--fg);white-space:pre-wrap;overflow-wrap:anywhere;
+  }
+  .message.user .bubble{background:var(--accent-subtle);border-color:rgba(56,139,253,.35)}
+
+  .chat-input-wrap{padding:10px;border-top:1px solid var(--border);background:var(--canvas)}
+  .chat-box{border:1px solid var(--border);border-radius:8px;background:var(--canvas);overflow:hidden}
+  .chat-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-subtle)}
+  .chat-input{
+    display:block;width:100%;height:80px;resize:none;border:0;outline:0;background:none;
+    color:var(--fg);padding:10px;font-size:13px;
+  }
+  .chat-input::placeholder{color:var(--fg-subtle)}
+  .chat-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:6px;border-top:1px solid var(--border-muted)}
+  .send{
+    height:30px;padding:0 14px;border:1px solid rgba(27,31,36,.15);border-radius:6px;
+    background:var(--success-emphasis);color:#fff;font-size:12px;font-weight:600;
+  }
+  .send:hover{background:var(--success-hover)}
+  .send:disabled{opacity:.5;cursor:not-allowed}
+  .typing{display:none;color:var(--fg-muted);font-size:11px;padding:4px 12px 8px}
+  .typing.show{display:block}
+
+  /* ================= TOAST ================= */
+  .toast{
+    position:fixed;left:50%;bottom:20px;transform:translate(-50%,12px);opacity:0;pointer-events:none;
+    background:#24292f;color:#fff;border-radius:8px;padding:10px 14px;font-size:12px;
+    box-shadow:0 8px 24px rgba(140,149,159,.4);transition:.2s;z-index:100;
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media (max-width:1100px){
+    .app{min-width:900px}
+    .workspace{grid-template-columns:minmax(190px,230px) 1fr minmax(260px,320px)}
+  }
+</style>
 </head>
 <body>
 <div class="app">
+
+  <!-- ================= TOPBAR ================= -->
   <header class="topbar">
-    <div class="brand"><div class="brand-logo">&lt;/&gt;</div><div><span class="brand-name">Sensei</span><span class="brand-sub">Learn &amp; Build</span></div></div>
-    <div class="status"><span class="status-dot"></span><span id="statusText">Checking GitHub connection...</span></div>
-    <div class="actions">
-      <button class="btn github-connect" id="connectGithubBtn" title="Connect GitHub">
+    <div class="brand">
+      <span class="brand-mark">
+        <!-- Octicon-style mark for Sensei -->
+        <svg viewBox="0 0 16 16"><path fill="currentColor" d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm3.53 5.47-4.5 4.5a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 1 1 1.06-1.06L6.5 8.44l3.97-3.97a.75.75 0 1 1 1.06 1.06Z"/></svg>
+      </span>
+      <div class="brand-text">
+        <strong>Sensei</strong>
+        <span>Learn &amp; Build</span>
+      </div>
+    </div>
+
+    <div class="crumb">
+      <strong id="repoCrumbName">No repository selected</strong>
+      <span class="sep" id="fileCrumbSep" style="display:none">/</span>
+      <span id="fileCrumbPath"></span>
+    </div>
+
+    <div class="topbar-spacer"></div>
+
+    <div class="status-pill">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Checking GitHub connection...</span>
+    </div>
+
+    <div class="top-actions">
+      <button class="gh-btn" id="connectGithubBtn" title="Connect GitHub">
         <svg class="github-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.24c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.74.08-.74 1.2.09 1.84 1.23 1.84 1.23 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.23a11.45 11.45 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.24 1.91 1.24 3.22 0 4.62-2.81 5.64-5.49 5.94.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .7Z"/></svg>
         <span id="connectText">Connect GitHub</span>
       </button>
-      <button class="btn icon" id="refreshBtn" title="Refresh repositories">↻</button>
-      <button class="avatar" id="avatarBtn" title="Account">S</button>
-      <div class="menu" id="profileMenu"><div class="menu-head"><strong>Sensei</strong><span id="accountState">GitHub not connected</span></div><button class="menu-item" id="menuConnect">Connect GitHub</button><button class="menu-item" id="logoutBtn">Logout</button></div>
+
+      <button class="gh-btn icon-only" id="refreshBtn" title="Refresh repositories">
+        <svg width="14" height="14" viewBox="0 0 16 16"><path fill="currentColor" d="M8 2.5a5.5 5.5 0 1 0 5.28 7h-1.57a4 4 0 1 1-.79-4.44L9.5 6.5H14V2l-1.6 1.6A5.48 5.48 0 0 0 8 2.5Z"/></svg>
+      </button>
+
+      <button class="avatar-btn" id="avatarBtn" title="Account">S</button>
+
+      <div class="menu" id="profileMenu">
+        <div class="menu-head">
+          <strong>Sensei</strong>
+          <span id="accountState">GitHub not connected</span>
+        </div>
+        <button class="menu-item" id="menuConnect">
+          <svg class="github-mark" width="14" height="14" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .7a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.24c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.74.08-.74 1.2.09 1.84 1.23 1.84 1.23 1.07 1.84 2.81 1.31 3.5 1 .11-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.17 0 0 1.01-.32 3.3 1.23a11.45 11.45 0 0 1 6 0c2.29-1.55 3.3-1.23 3.3-1.23.66 1.65.24 2.87.12 3.17.77.84 1.24 1.91 1.24 3.22 0 4.62-2.81 5.64-5.49 5.94.43.37.81 1.1.81 2.22v3.29c0 .32.22.69.83.57A12 12 0 0 0 12 .7Z"/></svg>
+          <span>Connect GitHub</span>
+        </button>
+        <div class="menu-divider"></div>
+        <button class="menu-item danger" id="logoutBtn">
+          <svg width="14" height="14" viewBox="0 0 16 16"><path fill="currentColor" d="M2 2.75A.75.75 0 0 1 2.75 2h5.5a.75.75 0 0 1 0 1.5h-4.75v9h4.75a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1-.75-.75Zm10.44 4.5L10.72 5.53a.75.75 0 1 1 1.06-1.06l3 3a.75.75 0 0 1 0 1.06l-3 3a.75.75 0 1 1-1.06-1.06l1.72-1.72H6.75a.75.75 0 0 1 0-1.5Z"/></svg>
+          <span>Logout</span>
+        </button>
+      </div>
     </div>
   </header>
 
+  <!-- ================= WORKSPACE ================= -->
   <main class="workspace" id="workspace">
+
+    <!-- ============ LEFT: REPO STRUCTURE ============ -->
     <section class="panel repo-panel" id="repoPanel">
-      <div class="panel-head"><span class="title">Repositories</span><span class="sub" id="repoCount">0</span><span class="spacer"></span><button class="head-btn" id="collapseRepo" title="Collapse">‹</button></div>
-      <div class="repo-controls"><select class="repo-select" id="repoSelect"><option value="">Select a repository...</option></select><div class="repo-meta" id="repoMeta">Connect GitHub to load repositories</div></div>
-      <div class="tree" id="repoTree"><div class="empty">Your repositories will appear here after GitHub authentication.</div></div>
+      <div class="panel-head">
+        <span class="title">Repositories</span>
+        <span class="sub" id="repoCount">0</span>
+        <span class="spacer"></span>
+        <button class="head-btn" id="collapseRepo" title="Collapse">‹</button>
+      </div>
+      <div class="repo-controls">
+        <select class="repo-select" id="repoSelect">
+          <option value="">Select a repository...</option>
+        </select>
+        <div class="repo-meta" id="repoMeta">Connect GitHub to load repositories</div>
+      </div>
+      <div class="tree" id="repoTree">
+        <div class="empty">Your repositories will appear here after GitHub authentication.</div>
+      </div>
     </section>
     <div class="resizer" id="repoResizer" title="Drag to resize repositories"></div>
 
+    <!-- ============ MIDDLE: MONACO CODE ============ -->
     <section class="panel editor-panel" id="editorPanel">
-      <div class="editor-bar"><span class="title">Code Editor</span><span class="sub" id="repoLabel">No repository</span><span class="spacer"></span><button class="head-btn" id="collapseEditor" title="Expand editor">□</button></div>
+      <div class="editor-bar">
+        <div class="file-path" id="filePathBar">
+          <svg width="14" height="14" viewBox="0 0 16 16" style="flex:0 0 14px"><path fill="currentColor" d="M4 1.75C4 .784 4.784 0 5.75 0h5.5C12.216 0 13 .784 13 1.75v12.5A.75.75 0 0 1 11.836 15L8 12.75 4.164 15A.75.75 0 0 1 3 14.25V1.75Z" opacity="0"/><path fill="currentColor" d="M2 1.75C2 .784 2.784 0 3.75 0h6.5c.966 0 1.75.784 1.75 1.75v12.59a.75.75 0 0 1-1.28.53L8 12.06l-2.72 2.81a.75.75 0 0 1-1.28-.53V1.75ZM3.75 1.5a.25.25 0 0 0-.25.25v10.88l1.97-2.04a.75.75 0 0 1 1.06 0l1.97 2.04V1.75a.25.25 0 0 0-.25-.25h-6.5Z"/></svg>
+          <span id="repoLabel">No repository</span>
+        </div>
+        <span class="spacer"></span>
+        <button class="head-btn" id="collapseEditor" title="Editor is the primary workspace">□</button>
+      </div>
       <div class="editor-tabs" id="editorTabs"></div>
       <div id="editor"></div>
-      <div class="editor-footer"><span id="position">Ln 1, Col 1</span><span class="spacer"></span><span id="editorState">Ready</span></div>
+      <div class="editor-footer">
+        <span id="position">Ln 1, Col 1</span>
+        <span class="spacer"></span>
+        <span id="editorState">Ready</span>
+      </div>
     </section>
     <div class="resizer" id="chatResizer" title="Drag to resize chat"></div>
 
+    <!-- ============ RIGHT: SENSEI AI CHAT ============ -->
     <section class="panel chat-panel" id="chatPanel">
-      <div class="panel-head"><span class="title">Sensei AI</span><span class="sub">RAG Assistant</span><span class="spacer"></span><button class="head-btn" id="clearChat" title="Clear chat">⌫</button><button class="head-btn" id="collapseChat" title="Collapse">›</button></div>
-      <div class="messages" id="messages"><div class="message assistant"><div class="msg-avatar">AI</div><div class="bubble">Select a repository and a file, then ask me anything about the code. I will use the repository context to answer.</div></div></div>
+      <div class="panel-head">
+        <span class="title">Sensei AI</span>
+        <span class="sub">RAG Assistant</span>
+        <span class="spacer"></span>
+        <button class="head-btn" id="clearChat" title="Clear chat">⌫</button>
+        <button class="head-btn" id="collapseChat" title="Collapse">›</button>
+      </div>
+      <div class="messages" id="messages">
+        <div class="message assistant">
+          <div class="msg-avatar">AI</div>
+          <div class="bubble">Select a repository and a file, then ask me anything about the code. I will use the repository context to answer.</div>
+        </div>
+      </div>
       <div class="typing" id="typing">Sensei is thinking...</div>
-      <div class="chat-input-wrap"><div class="chat-box"><textarea id="chatInput" class="chat-input" placeholder="Ask Sensei to explain, debug, or build..."></textarea><div class="chat-actions"><button class="send" id="sendBtn">Send ↵</button></div></div></div>
+      <div class="chat-input-wrap">
+        <div class="chat-box">
+          <textarea id="chatInput" class="chat-input" placeholder="Ask Sensei to explain, debug, or build..."></textarea>
+          <div class="chat-actions">
+            <button class="send" id="sendBtn">Send ↵</button>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 </div>
 <div class="toast" id="toast"></div>
+
 <script>
+  /* ================================================================
+     API ENDPOINTS — kept exactly as specified, untouched.
+     ================================================================ */
   const API={
     auth:"/auth",
     connectGithub:"/auth/github",
@@ -79,26 +397,40 @@
     ragChat:"/api/rag/chat"
   };
 
-  const state={authenticated:false,repositories:[],selectedRepository:null,tree:[],files:new Map(),tabs:[],activePath:null,editor:null,monaco:null,dragging:null,repoWidth:270,chatWidth:350};
+  const state={authenticated:false,repositories:[],selectedRepository:null,tree:[],files:new Map(),tabs:[],activePath:null,editor:null,monaco:null,dragging:null,repoWidth:230,chatWidth:400};
   const $=id=>document.getElementById(id);
 
   function toast(text){const t=$("toast");t.textContent=text;t.classList.add("show");clearTimeout(toast.timer);toast.timer=setTimeout(()=>t.classList.remove("show"),2600)}
   function status(text){$("statusText").textContent=text}
   function addMessage(role,text){const wrap=document.createElement("div");wrap.className="message "+role;wrap.innerHTML='<div class="msg-avatar">'+(role==="user"?"U":"AI")+'</div><div class="bubble"></div>';wrap.querySelector(".bubble").textContent=text;$("messages").appendChild(wrap);$("messages").scrollTop=$("messages").scrollHeight}
 
+  function setConnectedUI(connected){
+    $("statusDot").classList.toggle("off",!connected);
+    if(connected){
+      $("connectText").textContent="GitHub Connected";
+      $("accountState").textContent="GitHub connected";
+      status("GitHub connected");
+    }else{
+      $("connectText").textContent="Connect GitHub";
+      $("accountState").textContent="GitHub not connected";
+      status("Connect GitHub to begin");
+    }
+  }
+
   async function checkAuth(){
     try{
       const r=await fetch(API.auth,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({source:"sensei"})});
       const data=await r.json(); state.authenticated=data.authenticated===true;
-      if(state.authenticated){$("connectText").textContent="GitHub Connected";$("accountState").textContent="GitHub connected";status("GitHub connected");await loadRepositories()}
-      else{$("connectText").textContent="Connect GitHub";$("accountState").textContent="GitHub not connected";status("Connect GitHub to begin")}
+      setConnectedUI(state.authenticated);
+      if(state.authenticated){await loadRepositories()}
     }catch(e){console.error(e);status("Backend connection failed");toast("Could not reach backend")}
   }
 
   function connectGithub(){window.location.href=API.connectGithub}
   $("connectGithubBtn").addEventListener("click",connectGithub);$("menuConnect").addEventListener("click",connectGithub);
 
-  $("avatarBtn").addEventListener("click",e=>{e.stopPropagation();$("profileMenu").classList.toggle("open")});document.addEventListener("click",e=>{if(!e.target.closest(".actions"))$("profileMenu").classList.remove("open")});
+  $("avatarBtn").addEventListener("click",e=>{e.stopPropagation();$("profileMenu").classList.toggle("open")});
+  document.addEventListener("click",e=>{if(!e.target.closest(".top-actions"))$("profileMenu").classList.remove("open")});
 
   $("logoutBtn").addEventListener("click",async()=>{try{await fetch(API.logout,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"}});window.location.href="/"}catch(e){toast("Logout failed")}});
   $("refreshBtn").addEventListener("click",()=>state.authenticated?loadRepositories():connectGithub());
@@ -107,7 +439,7 @@
     try{
       status("Loading repositories...");$("repoMeta").textContent="Loading repositories...";
       const r=await fetch(API.repositories,{credentials:"include"});
-      if(r.status===401){state.authenticated=false;$("repoMeta").textContent="Connect GitHub to load repositories";status("GitHub session expired");return}
+      if(r.status===401){state.authenticated=false;setConnectedUI(false);$("repoMeta").textContent="Connect GitHub to load repositories";status("GitHub session expired");return}
       if(!r.ok)throw new Error("Repository request failed: "+r.status);
       const data=await r.json();state.repositories=Array.isArray(data)?data:(data.repositories||data.repos||[]);renderRepositories();
       $("repoCount").textContent=state.repositories.length;$("repoMeta").textContent=state.repositories.length+" repositories available";status("Repositories loaded");
@@ -118,7 +450,11 @@
   $("repoSelect").addEventListener("change",e=>{if(e.target.value==="")return;selectRepository(state.repositories[Number(e.target.value)])});
 
   async function selectRepository(repo){
-    state.selectedRepository=repo;state.files.clear();state.tabs=[];state.activePath=null;$("repoLabel").textContent=repo.fullName||repo.name;$("repoMeta").textContent="Loading repository structure and preparing RAG...";status("Reading "+(repo.name||"repository")+"...");renderTree([]);
+    state.selectedRepository=repo;state.files.clear();state.tabs=[];state.activePath=null;
+    $("repoLabel").textContent=repo.fullName||repo.name;
+    $("repoCrumbName").textContent=repo.fullName||repo.name;
+    $("fileCrumbSep").style.display="none";$("fileCrumbPath").textContent="";
+    $("repoMeta").textContent="Loading repository structure and preparing RAG...";status("Reading "+(repo.name||"repository")+"...");renderTree([]);
     try{
       const r=await fetch(API.repositoryTree(repo.id),{credentials:"include"});
       if(r.status===401)throw new Error("Authentication expired");
@@ -129,38 +465,100 @@
 
   function renderTree(items){const root=$("repoTree");root.innerHTML="";if(!items.length){root.innerHTML='<div class="empty">No repository files were returned.</div>';return}const nested=toNested(items);nested.forEach(n=>root.appendChild(treeNode(n,0)))}
   function toNested(items){if(items.some(x=>x&&Array.isArray(x.children)))return items;const root=[];for(const item of items){if(!item||!item.path)continue;const parts=item.path.split("/");let cur=root,path="";parts.forEach((part,i)=>{path+=(path?"/":"")+part;const last=i===parts.length-1;if(last)cur.push({...item,name:part,path:item.path,type:item.type||"blob"});else{let f=cur.find(x=>x.type==="tree"&&x.name===part);if(!f){f={name:part,path,type:"tree",children:[]};cur.push(f)}cur=f.children}})}return root}
-  function treeNode(node,depth){const wrap=document.createElement("div"),row=document.createElement("div");const folder=node.type==="tree"||Array.isArray(node.children);row.className="row "+(folder?"folder":"file");row.style.paddingLeft=(8+depth*15)+"px";row.innerHTML='<span class="arrow">'+(folder?"▶":"")+'</span><span class="file-icon">'+(folder?"●":"◇")+'</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escapeHtml(node.name||node.path)+'</span>';
-    if(folder){const c=document.createElement("div");c.className="children";(node.children||[]).forEach(x=>c.appendChild(treeNode(x,depth+1)));row.onclick=()=>{const open=c.classList.toggle("open");row.querySelector(".arrow").textContent=open?"▼":"▶"};wrap.append(row,c)}else{row.onclick=()=>openFile(node);wrap.append(row)}return wrap}
+
+  const folderIcon='<svg viewBox="0 0 16 16"><path d="M1.75 1h4.72a.75.75 0 0 1 .53.22l1.28 1.28h5.97c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14.5H1.75A1.75 1.75 0 0 1 0 12.75V2.75C0 1.784.784 1 1.75 1Z"/></svg>';
+  const fileIcon='<svg viewBox="0 0 16 16"><path d="M2 1.75C2 .784 2.784 0 3.75 0h5.086c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v8.586A1.75 1.75 0 0 1 11.75 15h-8A1.75 1.75 0 0 1 2 13.25Zm1.75-.25a.25.25 0 0 0-.25.25v11.5c0 .138.112.25.25.25h8a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 7.5 4.25V1.5Z"/></svg>';
+
+  function treeNode(node,depth){
+    const wrap=document.createElement("div"),row=document.createElement("div");
+    const folder=node.type==="tree"||Array.isArray(node.children);
+    row.className="row "+(folder?"folder":"file");
+    row.style.paddingLeft=(8+depth*15)+"px";
+    row.innerHTML='<span class="arrow">'+(folder?"▸":"")+'</span><span class="file-icon">'+(folder?folderIcon:fileIcon)+'</span><span class="row-label">'+escapeHtml(node.name||node.path)+'</span>';
+    if(folder){
+      const c=document.createElement("div");c.className="children";
+      (node.children||[]).forEach(x=>c.appendChild(treeNode(x,depth+1)));
+      row.onclick=()=>{const open=c.classList.toggle("open");row.querySelector(".arrow").textContent=open?"▾":"▸"};
+      wrap.append(row,c);
+    }else{
+      row.onclick=()=>{openFile(node);document.querySelectorAll(".row.active").forEach(r=>r.classList.remove("active"));row.classList.add("active")};
+      wrap.append(row);
+    }
+    return wrap;
+  }
   function escapeHtml(v){return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
 
   function languageFor(path){const ext=(path.split(".").pop()||"").toLowerCase();return({js:"javascript",jsx:"javascript",mjs:"javascript",cjs:"javascript",ts:"typescript",tsx:"typescript",py:"python",java:"java",cpp:"cpp",cc:"cpp",cxx:"cpp",c:"c",h:"cpp",hpp:"cpp",html:"html",htm:"html",css:"css",scss:"css",json:"json",md:"markdown",xml:"xml",yaml:"yaml",yml:"yaml",sql:"sql",sh:"shell",bash:"shell"})[ext]||"plaintext"}
+
   async function openFile(file){
-    if(!state.selectedRepository)return;const path=file.path;state.activePath=path;if(!state.tabs.includes(path))state.tabs.push(path);renderTabs();setEditorState("Loading "+path+"...");
-    try{let content=state.files.get(path);if(content===undefined){const r=await fetch(API.fileContent(state.selectedRepository.id,path),{credentials:"include"});if(!r.ok)throw new Error("File request failed: "+r.status);const d=await r.json();content=d.content||"";state.files.set(path,content)}createOrUpdateEditor(content,path);setEditorState("Ready")}catch(e){console.error(e);setEditorState("Failed to load file");toast("Could not load file")}
+    if(!state.selectedRepository)return;const path=file.path;state.activePath=path;if(!state.tabs.includes(path))state.tabs.push(path);renderTabs();
+    setEditorState("Loading "+path+"...");
+    $("fileCrumbSep").style.display="inline";$("fileCrumbPath").textContent=path;
+    try{
+      let content=state.files.get(path);
+      if(content===undefined){
+        const r=await fetch(API.fileContent(state.selectedRepository.id,path),{credentials:"include"});
+        if(!r.ok)throw new Error("File request failed: "+r.status);
+        const d=await r.json();content=d.content||"";state.files.set(path,content);
+      }
+      createOrUpdateEditor(content,path);setEditorState("Ready");
+    }catch(e){console.error(e);setEditorState("Failed to load file");toast("Could not load file")}
   }
   function renderTabs(){const t=$("editorTabs");t.innerHTML="";state.tabs.forEach(path=>{const el=document.createElement("div");el.className="tab "+(path===state.activePath?"active":"");el.innerHTML='<span class="tab-name">'+escapeHtml(path.split("/").pop())+'</span><span class="tab-close">×</span>';el.querySelector(".tab-name").onclick=()=>openFile({path});el.querySelector(".tab-close").onclick=e=>{e.stopPropagation();closeTab(path)};t.appendChild(el)})}
-  function closeTab(path){state.tabs=state.tabs.filter(x=>x!==path);if(state.activePath===path)state.activePath=state.tabs[state.tabs.length-1]||null;renderTabs();if(state.activePath)openFile({path:state.activePath});else createOrUpdateEditor("","plaintext")}
+  function closeTab(path){state.tabs=state.tabs.filter(x=>x!==path);if(state.activePath===path)state.activePath=state.tabs[state.tabs.length-1]||null;renderTabs();if(state.activePath)openFile({path:state.activePath});else{createOrUpdateEditor("","plaintext");$("fileCrumbSep").style.display="none";$("fileCrumbPath").textContent=""}}
   function setEditorState(t){$("editorState").textContent=t}
-  function createOrUpdateEditor(content,path){if(!state.editor){require(["vs/editor/editor.main"],()=>{state.monaco=window.monaco;state.editor=monaco.editor.create($("editor"),{value:content,language:languageFor(path),theme:"vs-dark",automaticLayout:true,fontSize:13,minimap:{enabled:false},fontFamily:"'Fira Code',Consolas,monospace",padding:{top:10}});bindEditor()})}else{monaco.editor.setModelLanguage(state.editor.getModel(),languageFor(path));state.editor.setValue(content);state.editor.focus()}}
+  function createOrUpdateEditor(content,path){
+    if(!state.editor){
+      require(["vs/editor/editor.main"],()=>{
+        state.monaco=window.monaco;
+        state.editor=monaco.editor.create($("editor"),{value:content,language:languageFor(path),theme:"vs-dark",automaticLayout:true,fontSize:13,minimap:{enabled:false},fontFamily:"'SFMono-Regular',Consolas,monospace",padding:{top:10}});
+        bindEditor();
+      });
+    }else{
+      monaco.editor.setModelLanguage(state.editor.getModel(),languageFor(path));
+      state.editor.setValue(content);
+      state.editor.focus();
+    }
+  }
   function bindEditor(){state.editor.onDidChangeCursorPosition(e=>$("position").textContent="Ln "+e.position.lineNumber+", Col "+e.position.column)}
 
-  $("sendBtn").addEventListener("click",sendChat);$("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat()}});
-  async function sendChat(){const input=$("chatInput"),query=input.value.trim();if(!query)return;if(!state.selectedRepository){toast("Select a repository first");return}addMessage("user",query);input.value="";$("sendBtn").disabled=true;$("typing").classList.add("show");
-    try{const r=await fetch(API.ragChat,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({repoId:String(state.selectedRepository.id),query,fileName:state.activePath||null})});if(r.status===401)throw new Error("GitHub session expired");if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||("Chat request failed: "+r.status))}const d=await r.json();addMessage("assistant",d.answer||d.response||"No answer returned.")}
-    catch(e){console.error(e);addMessage("assistant","I could not process that request. "+e.message);}
+  $("sendBtn").addEventListener("click",sendChat);
+  $("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendChat()}});
+  async function sendChat(){
+    const input=$("chatInput"),query=input.value.trim();if(!query)return;
+    if(!state.selectedRepository){toast("Select a repository first");return}
+    addMessage("user",query);input.value="";$("sendBtn").disabled=true;$("typing").classList.add("show");
+    try{
+      const r=await fetch(API.ragChat,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({repoId:String(state.selectedRepository.id),query,fileName:state.activePath||null})});
+      if(r.status===401)throw new Error("GitHub session expired");
+      if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||("Chat request failed: "+r.status))}
+      const d=await r.json();addMessage("assistant",d.answer||d.response||"No answer returned.");
+    }catch(e){console.error(e);addMessage("assistant","I could not process that request. "+e.message);}
     finally{$("sendBtn").disabled=false;$("typing").classList.remove("show")}
   }
   $("clearChat").addEventListener("click",()=>{$("messages").innerHTML='<div class="message assistant"><div class="msg-avatar">AI</div><div class="bubble">Chat cleared. Ask me anything about the selected repository.</div></div>'});
 
-  function applyWidths(){const w=$("workspace"),total=w.clientWidth;const minRepo=190,minEditor=360,minChat=270;let repo=Math.max(minRepo,Math.min(state.repoWidth,total-minEditor-minChat-12));let chat=Math.max(minChat,Math.min(state.chatWidth,total-repo-minEditor-12));w.style.gridTemplateColumns=repo+"px 1fr "+chat+"px";state.repoWidth=repo;state.chatWidth=chat}
+  function applyWidths(){
+    const w=$("workspace"),total=w.clientWidth;
+    const minRepo=190,minEditor=480,minChat=320;
+    let repo=w.classList.contains("repo-hidden")?0:Math.max(minRepo,Math.min(state.repoWidth,total-minEditor-minChat-12));
+    let chat=w.classList.contains("chat-hidden")?0:Math.max(minChat,Math.min(state.chatWidth,total-repo-minEditor-12));
+    if(!w.classList.contains("repo-hidden")){$("repoPanel").style.flexBasis=repo+"px";$("repoPanel").style.width=repo+"px";state.repoWidth=repo}
+    if(!w.classList.contains("chat-hidden")){$("chatPanel").style.flexBasis=chat+"px";$("chatPanel").style.width=chat+"px";state.chatWidth=chat}
+  }
   function startResize(which,e){e.preventDefault();state.dragging=which;document.body.style.cursor="col-resize";e.currentTarget.classList.add("dragging");const startX=e.clientX,startRepo=state.repoWidth,startChat=state.chatWidth;function move(ev){const dx=ev.clientX-startX;if(which==="repo")state.repoWidth=startRepo+dx;else state.chatWidth=startChat-dx;applyWidths()}function up(){state.dragging=null;document.body.style.cursor="";$("repoResizer").classList.remove("dragging");$("chatResizer").classList.remove("dragging");window.removeEventListener("mousemove",move);window.removeEventListener("mouseup",up)}window.addEventListener("mousemove",move);window.addEventListener("mouseup",up)}
   $("repoResizer").addEventListener("mousedown",e=>startResize("repo",e));$("chatResizer").addEventListener("mousedown",e=>startResize("chat",e));window.addEventListener("resize",applyWidths);
-  $("collapseRepo").addEventListener("click",()=>{const w=$("workspace");w.classList.toggle("repo-hidden");if(w.classList.contains("repo-hidden")){w.style.gridTemplateColumns="0 1fr "+state.chatWidth+"px"}else applyWidths()});
-  $("collapseChat").addEventListener("click",()=>{const w=$("workspace");w.classList.toggle("chat-hidden");if(w.classList.contains("chat-hidden")){w.style.gridTemplateColumns=state.repoWidth+"px 1fr 0"}else applyWidths()});
+
+  $("collapseRepo").addEventListener("click",()=>{const w=$("workspace");w.classList.toggle("repo-hidden");applyWidths()});
+  $("collapseChat").addEventListener("click",()=>{const w=$("workspace");w.classList.toggle("chat-hidden");applyWidths()});
   $("collapseEditor").addEventListener("click",()=>{toast("The editor remains the central workspace")});
 
   require.config({paths:{vs:"https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs"}});
-  require(["vs/editor/editor.main"],()=>{state.monaco=window.monaco;state.editor=monaco.editor.create($("editor"),{value:"// Select a repository file to begin.",language:"plaintext",theme:"vs-dark",automaticLayout:true,fontSize:13,minimap:{enabled:false},fontFamily:"'Fira Code',Consolas,monospace",padding:{top:10}});bindEditor();applyWidths();checkAuth()});
+  require(["vs/editor/editor.main"],()=>{
+    state.monaco=window.monaco;
+    state.editor=monaco.editor.create($("editor"),{value:"// Select a repository file to begin.",language:"plaintext",theme:"vs-dark",automaticLayout:true,fontSize:13,minimap:{enabled:false},fontFamily:"'SFMono-Regular',Consolas,monospace",padding:{top:10}});
+    bindEditor();applyWidths();checkAuth();
+  });
 </script>
 </body>
 </html>
