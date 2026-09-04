@@ -26,7 +26,7 @@ def ask_question(
     query,
     github_id,
     repo_id,
-    top_k=5
+    top_k=2
 ):
     results = retrieve_chunks(
         query=query,
