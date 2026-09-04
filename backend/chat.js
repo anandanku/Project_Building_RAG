@@ -26,11 +26,11 @@ const RAG_COMPONENTS_PATH =
     path.join(__dirname, "..", "RAG_Components");
 
 /*
-    Project summary lives for 24 hours.
+    All repository-related cached data lives for 24 hours.
 
     24 * 60 * 60 = 86400 seconds
 */
-const PROJECT_SUMMARY_TTL = 86400;
+const CACHE_TTL = 86400;
 
 
 /* =========================================================
@@ -66,6 +66,7 @@ function getRedisKeys(githubId, repoId) {
     const id = `${githubId}:${repoId}`;
 
     return {
+        repoInfo: `repo_info:${id}`,
         projectSummary: `project_summary:${id}`,
         chatSummary: `chat_summary:${id}`
     };
@@ -301,6 +302,80 @@ async function getRepositoryFiles(req, repository, treeResponse) {
     }
 
     return files;
+}
+
+
+/* =========================================================
+   REPOSITORY CACHE
+========================================================= */
+
+async function getRepositoryInfo(req, repoId, keys) {
+    const cachedRepositoryInfo = await redis.get(keys.repoInfo);
+
+    if (cachedRepositoryInfo) {
+        try {
+            const repositoryInfo = JSON.parse(cachedRepositoryInfo);
+
+            if (
+                repositoryInfo &&
+                repositoryInfo.repository &&
+                repositoryInfo.treeResponse &&
+                Array.isArray(repositoryInfo.treeResponse.tree)
+            ) {
+                console.log(
+                    `Repository info loaded from Redis for ${keys.repoInfo}`
+                );
+
+                return repositoryInfo;
+            }
+
+            console.warn(
+                `Invalid repository cache found for ${keys.repoInfo}. Refreshing from GitHub.`
+            );
+        } catch (error) {
+            console.warn(
+                `Could not parse repository cache for ${keys.repoInfo}. Refreshing from GitHub:`,
+                error.message
+            );
+        }
+    }
+
+    console.log(
+        `Repository info not found in Redis. Fetching from GitHub for ${repoId}`
+    );
+
+    const repository = await getRepository(req, repoId);
+
+    const treeResponse = await getRepositoryTree(
+        req,
+        repository
+    );
+
+    const repositoryFiles = await getRepositoryFiles(
+        req,
+        repository,
+        treeResponse
+    );
+
+    const repositoryInfo = {
+        repository,
+        treeResponse,
+        files: repositoryFiles
+    };
+
+    await redis.set(
+        keys.repoInfo,
+        JSON.stringify(repositoryInfo),
+        {
+            EX: CACHE_TTL
+        }
+    );
+
+    console.log(
+        `Repository info stored in Redis for 24 hours`
+    );
+
+    return repositoryInfo;
 }
 
 
@@ -561,19 +636,33 @@ router.post(
             await connectRedis();
 
             const githubId = String(req.user.githubId);
+            const keys = getRedisKeys(githubId, repoId);
 
-            const repository = await getRepository(req, repoId);
+            /*
+                Repository information is the first cache layer.
 
-            const treeResponse = await getRepositoryTree(
+                CACHE HIT:
+                    Use repository + tree + files directly from Redis.
+
+                CACHE MISS:
+                    Fetch everything required from GitHub once, then cache
+                    the complete repository information for 24 hours.
+            */
+            const repositoryInfo = await getRepositoryInfo(
                 req,
-                repository
+                repoId,
+                keys
             );
+
+            const repository = repositoryInfo.repository;
+            const treeResponse = repositoryInfo.treeResponse;
+            const repositoryFiles = Array.isArray(repositoryInfo.files)
+                ? repositoryInfo.files
+                : [];
 
             const repositoryStructure = createRepositoryStructure(
                 treeResponse
             );
-
-            const keys = getRedisKeys(githubId, repoId);
 
             let projectSummary = await redis.get(
                 keys.projectSummary
@@ -582,12 +671,6 @@ router.post(
             if (!projectSummary) {
                 console.log(
                     `No valid project summary found for ${githubId}:${repoId}`
-                );
-
-                const repositoryFiles = await getRepositoryFiles(
-                    req,
-                    repository,
-                    treeResponse
                 );
 
                 projectSummary = await generateProjectSummary({
@@ -601,7 +684,7 @@ router.post(
                     keys.projectSummary,
                     projectSummary,
                     {
-                        EX: PROJECT_SUMMARY_TTL
+                        EX: CACHE_TTL
                     }
                 );
 
@@ -644,7 +727,10 @@ ${query.trim()}
 
             await redis.set(
                 keys.chatSummary,
-                updatedChatSummary
+                updatedChatSummary,
+                {
+                    EX: CACHE_TTL
+                }
             );
 
             return res.json({
