@@ -1,4 +1,4 @@
-# Project Building RAG
+# sensei_RAG
 
 A repository-aware RAG system for understanding and querying GitHub codebases. It combines semantic code retrieval, persistent project context, conversational memory, GitHub OAuth, and caching to provide context-aware answers about a software project.
 
